@@ -20,6 +20,6 @@ Artwork: [Spicy](https://oasis.100percentnig.ga/users/mario7in1), [Inverse](http
 
 Marketing: [Pip](https://github.com/Pikacraft64)
 
-Testing: [Mippy ❤️](https://closed.pizza/users/Mippy)
+Testing: [Mippy ❤️](https://indigo.cafe/users/Mario)
 ## Anything else?
 Not much yet, thanks for asking.
