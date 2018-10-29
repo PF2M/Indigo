@@ -1,7 +1,7 @@
 # Indigo
 The Miiverse clone to end all Miiverse clones, for real this time. **NOTICE:** This code is WIP and is only being posted to fix errors more easily.
 ## What is this?
-See [the FAQ](https://indigo.media/help/faq) if you have any questions about this. Long story short, this is the most recent in a long line of similar-looking social networks known as "[Miiverse](https://miiverse.nintendo.net/) clones" which was created for speed, new features, and getting away from the bad ownership and administration of the previous iterations. The production version will be at <https://indigo.media/>.
+See [the FAQ](https://indigo.cafe/help/faq) if you have any questions about this. Long story short, this is the most recent in a long line of similar-looking social networks known as "[Miiverse](https://miiverse.nintendo.net/) clones" which was created for speed, new features, and getting away from the bad ownership and administration of the previous iterations.
 ## Installation
 1. Install the latest version of Go from [golang.org](https://golang.org/dl/) or from the official gopher repository.
 2. Download the .ZIP file or clone the repository like any other project.
