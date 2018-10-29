@@ -1,0 +1,16 @@
+<ul class="list-content-with-icon-and-text recent-community-list" data-next-page-url="{{if .Communities}}/communities/recent?offset={{.Offset}}{{end}}">
+    {{range $community := .Communities}}
+        <li class="trigger" data-action="{{if eq $community.ID 0}}/activity{{else}}/communities/{{$community.ID}}{{end}}">
+            <div class="icon-container">
+                <img src="{{$community.Icon}}" class="icon">
+            </div>
+            <div class="body">
+                <p class="title">
+                    <span class="nick-name">
+                        <a>{{$community.Title}}</a>
+                    </span>
+                </p>
+            </div>
+        </li>
+    {{end}}
+</ul>

@@ -1,0 +1,56 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body">
+    <div id="sidebar">
+        <menu id="admin-menu">
+            <li id="admin-menu-list">
+                <ul>
+                    <li id="admin-menu-dashboard"><a href="/admin" class="symbol"><span>Dashboard</span></a></li>
+                    <li id="admin-menu-manage" class="selected"><a href="/admin/manage" class="symbol"><span>Manage</span></a></li>
+                    {{if le .Admin.Settings.MinimumLevel .CurrentUser.Level}}<li id="admin-menu-settings"><a href="/admin/settings" class="symbol"><span>Settings</span></a></li>{{end}}
+                </ul>
+            </li>
+        </menu>
+    </div>
+    <div class="main-column">
+        <div class="post-list-outline">
+            <h2 class="label">Admin Manager</h2>
+            <p style="margin:20px 10px 0px">Pip told me I shouldn't actually work on this until I have the actual essential features for Indigo done, so this is all you're getting for now. Sorry.</p>
+            <form class="setting-form" method="post" action="/admin/manage/bantemp">
+                <input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+                <p class="settings-label">Ban User</p>
+                <input type="text" name="username" placeholder="Username">
+                <p><label class="note">Ban entire IP range: <input type="checkbox" name="cidr" value="1"></label></p>
+                <label class="note">Length:
+                    <select name="length">
+                        <option value="1">1 day</option>
+                        <option value="2">2 days</option>
+                        <option value="3">3 days</option>
+                        <option value="4">4 days</option>
+                        <option value="5">5 days</option>
+                        <option value="6">6 days</option>
+                        <option value="7">1 week</option>
+                        <option value="14">2 weeks</option>
+                        <option value="28">4 weeks</option>
+                        <option value="90">90 days</option>
+                        <option value="365">1 year</option>
+                        <option value="25338300">69420 years</option>
+                    </select>
+                </label><br>
+                <button class="black-button" type="submit">Do it</button>
+            </form><br>
+            <form class="setting-form" method="post" action="/admin/manage/unbantemp">
+                <input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+                <p class="settings-label">Unban User</p>
+                <input type="text" name="username" placeholder="Username"><br>
+                <button class="black-button" type="submit">Do it</button>
+            </form>
+        </div>
+    </div>
+</div>
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}

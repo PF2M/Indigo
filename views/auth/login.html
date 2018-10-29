@@ -1,0 +1,37 @@
+{{template "header.html" .}}
+<meta property="og:description" content="Sign in with an Indigo account to create posts and comments, edit your profile, and connect with other Indigo users.">
+<div id="main-body" class="guest">
+	<div class="main-column center">
+		<div class="post-list-outline login-page">
+			<form method="post">
+				{{.CSRFField}}
+				<img src="/assets/img/menu-logo.png">
+				<p class="lh">Log In</p>
+				<p>
+					{{if not .ForceLogins}}
+						Sign in with an Indigo account to create posts and comments, edit your profile, and connect with other Indigo users.
+					{{else}}
+						<img src="https://res.cloudinary.com/indigolang/image/upload/v1540207716/xlg6ms1uq661a5qp9gp1.png" style="width:100%">
+					{{end}}
+				</p>
+				<h3 class="label"><label>User ID: <input type="text" class="auth-input" name="username" maxlength="32" placeholder="User ID"></label></h3>
+				<h3 class="label"><label>Password: <input type="password" class="auth-input" name="password" maxlength="32" placeholder="Password"></label></h3>
+				<p class="red" style="margin-bottom:6px">{{if eq .FormError "1"}}The username/password combination you entered is not correct.{{end}}</p>
+				<button type="submit" class="button">Sign In</button>
+				<div class="ll">
+					<p>Forgot your password? <a href="/reset">Go here to reset it.</a></p>
+				</div>
+				{{if .AllowSignups}}
+					<div class="ll">
+						<p>If you don't have an account, <a href="/signup">you can sign up here.</a></p>
+					</div>
+				{{else}}
+					<div class="ll">
+						<p>If you don't have an account, <a href="https://www.youtube.com/watch?v=oRdxUFDoQe0">you can wait until it's out, you impatient little shit.</a></p>
+					</div>
+				{{end}}
+			</form>
+		</div>
+	</div>
+</div>
+{{template "footer.html"}}

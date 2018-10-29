@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" class="os-mac">
+<head>
+	<meta charset="utf-8">
+	<title>{{.Title}} - Indigo</title>
+	<meta http-equiv="content-style-type" content="text/css">
+	<meta http-equiv="content-script-type" content="text/javascript">
+	<meta http-equiv="content-security-policy" content="block-all-mixed-content">
+	<meta name="format-detection" content="telephone=no">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<meta name="apple-mobile-web-app-title" content="Indigo">
+	<meta name="description" content="Indigo is a Miiverse clone that allows you to discuss all kinds of games and topics! With lighter administration policies and more fun features to use, Indigo will truly be the Miiverse clone to end all Miiverse clones.">
+	<meta property="og:locale" content="en_US">
+	<meta property="og:title" content="{{.Title}}">
+	<meta property="og:type" content="article">
+	<meta property="og:image" content="/assets/img/favicon.png">
+	<meta property="og:site_name" content="Indigo">
+	<meta property="article:published_time" content="None">
+	<link rel="shortcut icon" type="image/png" href="/assets/img/favicon.png">
+	<link rel="stylesheet" type="text/css" href="/assets/css/offdevice.css">
+	{{if .CurrentUser.Theme}}
+		<style id="theme">
+			:root {
+				--theme: {{index .CurrentUser.ThemeColors 0}};
+				--theme-light: {{index .CurrentUser.ThemeColors 1}};
+				--theme-dark: {{index .CurrentUser.ThemeColors 2}};
+				--theme-darker: {{index .CurrentUser.ThemeColors 3}};
+			}
+		</style>
+		<link rel="stylesheet" type="text/css" href="/assets/css/color.css">
+	{{end}}
+	<link id="darkness" {{if .CurrentUser.LightMode}}disabled{{end}} rel="stylesheet" type="text/css" href="/assets/css/dark.css">
+	<script src="/assets/js/jslibs.js"></script>
+	<script src="/assets/js/indigo.js"></script>
+	{{if .CurrentUser.WebsocketsEnabled}}
+		<script id="websockets" src="/assets/js/websocket.js"></script>
+	{{else}}
+		<script>var websocketsEnabled = false;</script>
+	{{end}}
+</head>
+<body class="{{if not .CurrentUser.Username}}guest"{{else}}" sess-usern="{{.CurrentUser.Username}}"{{end}} csrf-token="{{.CurrentUser.CSRFToken}}">
+	<div id="wrapper" class="{{if not .CurrentUser.Username}}guest{{end}}">
+	<div id="sub-body">
+		<menu id="global-menu">
+			<li id="global-menu-logo"><h1><a href="/"><img src="/assets/img/menu-logo.png" alt="Indigo"></a></h1></li>
+			{{if not .CurrentUser.Username}}
+				<li id="global-menu-login">
+					<a href="/login" class="login">
+						<input type="image" alt="Sign in" src="/assets/img/sign-in.png">
+					</a>
+				</li>
+			{{else}}
+				<li id="global-menu-list">
+					<ul>
+						<li id="global-menu-mymenu">
+							<a href="/users/{{.CurrentUser.Username}}">
+								<span class="icon-container">
+									<img src="{{.CurrentUser.Avatar}}" alt="User Page"{{if .CurrentUser.Role.Image}} class="official-user"><img src="{{.CurrentUser.Role.Image}}" class="official-tag">{{else}}>{{end}}
+								</span>
+								<span>User Page</span>
+							</a>
+						</li>
+						<li id="global-menu-feed"><a href="/activity" class="symbol"><span>Activity Feed</span></a></li>
+						<li id="global-menu-community"><a href="/" class="symbol"><span>Communities</span></a></li>
+						<li id="global-menu-message"><a href="/messages" class="symbol"><span>Messages</span><span class="badge"{{if not .CurrentUser.Notifications.Messages}} style="display: none;"{{end}}>{{.CurrentUser.Notifications.Messages}}</span></a></li>
+						<li id="global-menu-news"><a href="/notifications" class="symbol"><span class="badge"{{if not .CurrentUser.Notifications.Notifications}} style="display: none;"{{end}}>{{.CurrentUser.Notifications.Notifications}}</span></a></li>
+						<li id="global-menu-my-menu"><button class="symbol js-open-global-my-menu open-global-my-menu"></button>
+							<menu id="global-my-menu" class="invisible none">
+								<li><a href="/settings/profile" class="symbol my-menu-profile-setting"><span>Profile Settings</span></a></li>
+								<li><a href="#" class="symbol my-menu-account-setting"><span>Account Settings</span></a></li>
+								<li><a href="/help/rules" class="symbol my-menu-guide"><span>Indigo Rules</span></a></li>
+								<li><a href="/help/legal" class="symbol my-menu-guide"><span>Legal Information</span></a></li>
+								<li><a href="/help/contact" class="symbol my-menu-info"><span>Contact the Team</span></a></li>
+								<li><a href="/blocked" class="symbol my-menu-block"><span>Blocked Users</span></a></li>
+								{{if gt .CurrentUser.Level 0}}<li><a href="/admin" class="symbol my-menu-info"><span>Admin Panel</span></a></li>{{end}}
+								<li>
+									<form action="/logout" method="post" id="my-menu-logout" class="symbol">
+										<input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+										<input type="submit" value="Log out">
+									</form>
+								</li>
+							</menu>
+						</li>
+					</ul>
+				</li>
+			{{end}}
+		</menu>
+	</div>
+	<div id="container">

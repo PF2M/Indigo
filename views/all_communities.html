@@ -1,0 +1,39 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+    <meta property="og:description" content="View all the communities on Indigo.">
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body" class="profile-top">
+    {{template "general_sidebar.html" .}}
+    <div class="main-column">
+        <div class="post-list-outline">
+            <div class="body-content" id="community-top">
+                <h2 class="label">All Communities</h2>
+                <ul class="list community-list"{{if .Communities}} data-next-page-url="/communities/all?offset={{.Offset}}"{{end}}>
+                    {{if .Communities}}
+                        {{range $community := .Communities}}
+                        <li class="trigger" data-href="/communities/{{$community.ID}}">
+                            <div class="community-list-body">
+                                <span class="icon-container"><img src="{{$community.Icon}}" class="icon"></span>
+                                <div class="body">
+                                    <a class="title" href="/communities/{{$community.ID}}">{{$community.Title}}</a>
+                                </div>
+                            </div>
+                        </li>
+                        {{end}}
+                    {{else}}
+                        {{if eq .Offset 25}}
+                            <div class="no-content">
+                                <p>No communities have been made yet.</p>
+                            </div>
+                        {{end}}
+                    {{end}}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}

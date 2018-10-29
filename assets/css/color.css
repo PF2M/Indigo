@@ -1,0 +1,60 @@
+#global-menu li a:hover, #global-menu li button:hover {
+    box-shadow: inset 0 -4px 0 -1px var(--theme);
+}
+h2.label,
+#global-menu #global-my-menu .symbol:before,
+.feeling-selector .feeling-button.checked,
+.sidebar-setting .symbol:before,
+.post-meta .yeah-added + .yeah,
+.reply-meta .yeah-added + .yeah,
+.post-meta .yeah-added + .yeah:before,
+.reply-meta .yeah-added + .yeah:before,
+.user-organization,
+.user-sidebar .follow-button:before,
+.user-sidebar .friend-button:before,
+.list .toggle-button .follow-button:before,
+.list .toggle-button .follow-done-button:before,
+.news-list a.link,
+#admin-menu li.selected a {
+    color: var(--theme);
+}
+#global-menu li.selected a,
+#global-menu li.selected a:before {
+    color: var(--theme) !important;
+}
+#nprogress .bar,
+h2.reply-label,
+#cookie-policy-notice a:hover,
+#cookie-policy-notice button:hover,
+#cookie-policy-notice .cookie-policy-notice,
+#cookie-policy-notice .cookie-policy-notice:hover,
+.user-data h4 span,
+.index-memo h2:not(.label),
+#help .help-content h2,
+.tab2 a.selected, .tab3 a.selected,
+.textarea-with-menu.active-text .textarea-menu-text,
+.textarea-with-menu.active-memo .textarea-menu-memo,
+.textarea-with-menu.active-poll .textarea-menu-poll,
+.textarea-with-menu .textarea-poll .delete:hover {
+    background: var(--theme);
+}
+h2.label {
+    border-bottom: 3px solid var(--theme);
+}
+h2.reply-label {
+    border-top: 1px solid var(--theme);
+}
+.dialog .window-title {
+    border-top: 1px solid var(--theme);
+    border-bottom: 1px solid var(--theme);
+    background: var(--theme);
+}
+#reply-content .list .my,
+#reply-content .list > li.my:hover {
+    background: var(--theme-light);
+}
+@media screen and (max-width: 980px) {
+    #global-menu li.selected a {
+        border-bottom: 2px solid var(--theme);
+    }
+}

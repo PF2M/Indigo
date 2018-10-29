@@ -1,0 +1,122 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body">
+    {{template "general_sidebar.html" .}}
+    <div class="main-column">
+	<div class="headline">
+		<h2 class="headline-text">
+			<span class="symbol activity-headline">{{.Title}}</span>
+		</h2>
+		<form class="search" action="/users">
+			<input type="text" name="query" title="Search users" placeholder="Search users" minlength="1" maxlength="32">
+			<input type="submit" value="q" title="Search">
+		</form>
+	</div>
+	<div class="post-form none">
+		<form id="post-form" method="post" action="/communities/0/posts"{{if not .Repost.ID}} class="folded"{{end}} data-post-subtype="default" name="test-post-default-form">
+			<input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+			<input type="hidden" name="community" value="0">
+			{{if .Repost.ID}}<input type="hidden" name="repost" value="{{.Repost.ID}}">
+			<p class="repost-notice">You are reposting <a class="topic-title" href="/posts/{{.Repost.ID}}" target="_blank">{{.Repost.Nickname}}'s post ({{.Repost.Text}})</a> along with this submission.</p>{{end}}
+			<div class="feeling-selector js-feeling-selector"><label class="symbol feeling-button feeling-button-normal checked"><input type="radio" name="feeling_id" value="0" checked><span class="symbol-label">normal</span></label><label class="symbol feeling-button feeling-button-happy"><input type="radio" name="feeling_id" value="1"><span class="symbol-label">happy</span></label><label class="symbol feeling-button feeling-button-like"><input type="radio" name="feeling_id" value="2"><span class="symbol-label">like</span></label><label class="symbol feeling-button feeling-button-surprised"><input type="radio" name="feeling_id" value="3"><span class="symbol-label">surprised</span></label><label class="symbol feeling-button feeling-button-frustrated"><input type="radio" name="feeling_id" value="4"><span class="symbol-label">frustrated</span></label><label class="symbol feeling-button feeling-button-puzzled"><input type="radio" name="feeling_id" value="5"><span class="symbol-label">puzzled</span></label></div>
+			<div class="textarea-with-menu active-text">
+				<menu class="textarea-menu">
+					<li><label class="textarea-menu-text"><input type="radio" name="post_type" value="0"></label></li>
+					<li><label class="textarea-menu-memo"><input type="radio" name="post_type" value="1"></label></li>
+					<li><label class="textarea-menu-poll"><input type="radio" name="post_type" value="2"></label></li>
+					<span class="character-count">2000</span>
+				</menu>
+				<div class="textarea-container">
+					<textarea name="body" class="textarea-text textarea" maxlength="2000" placeholder="Share your thoughts in a post to the Activity Feed." data-open-folded-form data-required></textarea>
+				</div>
+				<div class="textarea-memo none">
+					<div id="memo-drawboard-page" class="none">
+						<div class="window-body">
+							<div class="memo-buttons">
+								<button type="button" class="artwork-clear"></button>
+								<button type="button" class="artwork-undo"></button>
+								<button type="button" class="artwork-pencil small selected"></button>
+								<button type="button" class="artwork-eraser small"></button>
+								<button type="button" class="artwork-fill"></button>
+								<input type="text" class="artwork-color">
+								<button type="button" class="artwork-zoom"></button>
+							</div>
+							<div class="memo-canvas">
+								<canvas id="artwork-canvas" zoom="2"></canvas>
+								<canvas id="artwork-canvas-undo"></canvas>
+								<canvas id="artwork-canvas-redo"></canvas>
+								<input type="hidden" name="painting">
+							</div>
+							<div class="form-buttons">
+								<input class="olv-modal-close-button black-button memo-finish-btn" type="button" value="Save">
+								<button type="button" class="artwork-lock none"></button>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="textarea-poll none">
+					<button type="button" class="delete none" option="option-a"></button><input type="text" class="url-form option" name="option-a" placeholder="Option A" maxlength="64" data-required>
+					<button type="button" class="delete none" option="option-b"></button><input type="text" class="url-form option" name="option-b" placeholder="Option B" maxlength="64" data-required>
+					<button type="button" class="add-option symbol">Add Option</button>
+				</div>
+			</div>
+			<label class="file-button-container">
+				<span class="input-label">Attachment <span>Images, audio and videos are allowed.
+					{{if .MaxUploadSize}}Maximum upload size: {{.MaxUploadSize}}{{end}}
+				</span></span>
+				<span class="button file-upload-button">Upload</span>
+				<input accept="image/*, audio/*, video/*" type="file" class="file-button none">
+				<input type="hidden" name="image">
+				<input type="hidden" name="attachment_type">
+				<div class="screenshot-container still-image preview-container" style="display: none;">
+					<img class="preview-image none">
+					<video class="preview-video none" controls></video>
+					<audio class="preview-audio none" controls></audio>
+				</div>
+				<script src="/assets/js/upload.js"></script>
+			</label>
+			<div class="post-form-footer-options">
+				<div class="post-form-footer-option-inner post-form-spoiler js-post-form-spoiler test-post-form-spoiler">
+					<label class="spoiler-button symbol"><input type="checkbox" id="is_spoiler" name="is_spoiler" value="1">Spoilers</label>
+				</div>
+			</div>
+			<div class="post-form-privacy">
+				<p>Who should be able to see this post?</p>
+				<select class="post-form-privacy-select" name="privacy">
+					<option value="0"{{if eq .CurrentUser.DefaultPrivacy 0}} selected{{end}}>Everyone</option>
+					<option value="1"{{if eq .CurrentUser.DefaultPrivacy 1}} selected{{end}}>Friends, Following and Followers</option>
+					<option value="2"{{if eq .CurrentUser.DefaultPrivacy 2}} selected{{end}}>Friends and Following</option>
+					<option value="3"{{if eq .CurrentUser.DefaultPrivacy 3}} selected{{end}}>Friends and Followers</option>
+					<option value="4"{{if eq .CurrentUser.DefaultPrivacy 4}} selected{{end}}>Friends Only</option>
+					<option value="5"{{if eq .CurrentUser.DefaultPrivacy 5}} selected{{end}}>Followers and Following</option>
+					<option value="6"{{if eq .CurrentUser.DefaultPrivacy 6}} selected{{end}}>Followers Only</option>
+					<option value="7"{{if eq .CurrentUser.DefaultPrivacy 7}} selected{{end}}>Following Only</option>
+					<option value="8"{{if eq .CurrentUser.DefaultPrivacy 8}} selected{{end}}>Admins Only</option>
+					<option value="9"{{if eq .CurrentUser.DefaultPrivacy 9}} selected{{end}}>Only Me</option>
+				</select>
+			</div>
+			<div class="form-buttons">
+				<input type="submit" class="black-button post-button disabled" value="Send" data-community-id="{{.Community.ID}}" data-post-content-type="text" data-post-with-screenshot="nodata" disabled>
+			</div>
+		</form>
+	</div>
+	<div id="js-main">
+		<div class="activity-feed content-loading-window">
+			<span class="loading-spinner"></span>
+			<div><p class="tleft"><span>Loading Activity Feed...</span></p></div>
+			<div class="activity-feed content-load-error-window none">
+				<div>
+					<p>The activity feed couldn't be loaded. Check your Internet connection, wait a moment, and then try reloading.</p>
+					<div class="buttons-content"><a href="/activity" class="button">Reload</a></div>
+				</div>
+			</div>
+		</div>
+	</div>
+    </div>
+</div>
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}

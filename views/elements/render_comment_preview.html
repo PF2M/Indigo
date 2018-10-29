@@ -1,0 +1,28 @@
+<div class="recent-reply-content">
+    <div tabindex="0" class="recent-reply trigger">
+        <a href="/users/{{.CommentPreview.CommenterUsername}}" username="{{.CommentPreview.CommenterUsername}}" class="icon-container{{if not .CommentPreview.CommenterHideOnline}} {{if .CommentPreview.CommenterOnline}}online{{else}}offline{{end}}{{end}}
+        {{if .CommentPreview.CommenterRoleImage}} official-user"><img src="{{.CommentPreview.CommenterRoleImage}}" class="official-tag">{{else}}">{{end}}
+            <img src="{{.CommentPreview.CommenterIcon}}" class="icon">
+        </a>
+        <p class="user-name"><a href="/users/{{.CommentPreview.CommenterUsername}}"{{if .CommentPreview.CommenterColor}} style="color:{{.CommentPreview.CommenterColor}}"{{end}}>{{.CommentPreview.CommenterNickname}}</a></p>
+        <p class="timestamp-container">
+            <a class="timestamp" href="/comments/{{.CommentPreview.ID}}">
+                <span class="update" time="{{.CommentPreview.CreatedAtUnix}}000">{{.CommentPreview.CreatedAt}}</span>
+                {{if .CommentPreview.EditedAt}}
+                    (Edited <span class="update" time="{{.CommentPreview.EditedAtUnix}}000">{{.CommentPreview.EditedAt}}</span>)
+                {{end}}
+	        </a>
+        </p>
+        <div class="body">
+            <div class="post-content">
+                {{if eq .CommentPreview.PostType 1}}
+                    <div class="recent-reply-content-memo">
+                        <img src="{{.CommentPreview.BodyText}}">
+                    </div>
+                {{else}}
+                    <div class="recent-reply-content-text">{{.CommentPreview.Body}}</div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+</div>

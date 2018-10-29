@@ -1,0 +1,243 @@
+{{if .Pjax}}
+	{{template "header.html" .}}
+	<meta property="og:profile:username" content="{{.Comment.CommenterUsername}}">
+    <meta property="og:description" content="{{if .Comment.Body}}{{.Comment.Body}}{{else}}View {{.Comment.CommenterNickname}}'s comment on Indigo.{{end}}">
+    {{if .Comment.Image}}<meta property="og:{{if eq .Comment.AttachmentType 1}}audio{{else if eq .Comment.AttachmentType 2}}video{{else}}image{{end}}" content="{{.Comment.Image}}">{{end}}
+{{else}}
+	<title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body">
+	<div class="main-column">
+		<div class="post-list-outline">
+			<a class="post-permalink-button info-ticker"{{if not .Post.IsRM}} href="/posts/{{.Comment.PostID}}"{{end}}>
+				<span class="icon-container"><img src="{{.Post.PosterIcon}}" class="icon"></span>
+				<span>View <span class="post-user-description">{{.Post.PosterNickname}}'s post ({{.Post.BodyText}})</span> for this comment.</span>
+			</a>
+		</div>
+		<div class="post-list-outline more">
+			<div id="post-content" class="post reply-permalink-post">
+				<div id="{{.Comment.ID}}" class="other">
+					<p class="community-container"><a{{if not .Post.CommunityRM}} href="/communities/{{.Post.CommunityID}}"{{end}}><img src="{{.Post.CommunityIcon}}" class="community-icon">{{.Post.CommunityName}}</a></p>
+					{{if not .Comment.IsRMByAdmin}}
+						{{if or (eq .Comment.CreatedBy .CurrentUser.ID) (gt .CurrentUser.Level 0)}}
+							<div class="edit-buttons-content">
+								<button type="button" class="symbol button edit-button rm-post-button" data-action="/comments/{{.Comment.ID}}/delete"><span class="symbol-label">Delete</span></button>
+								{{if and (eq .Comment.CreatedBy .CurrentUser.ID) (not (eq .Comment.PostType 1))}}<button type="button" class="symbol button edit-button edit-post-button"><span class="symbol-label">Edit</span></button>{{end}}
+							</div>
+						{{else if .CurrentUser.Username}}
+							<div class="report-buttons-content" style="float:right"><button type="button" class="report-button" data-modal-open="#report-violation-page" data-screen-name="{{.Comment.CommenterNickname}}" data-support-text="#{{.Comment.ID}}" data-action="/comments/{{.Comment.ID}}/violations" data-is-permalink="1" data-can-report-spoiler="{{if .Comment.IsSpoiler}}0{{else}}1{{end}}" data-url-id="{{.Comment.ID}}" data-track-action="openReportModal">Report Violation</button></div>
+						{{end}}
+					{{end}}
+					<div class="user-content">
+						<a username="{{.Comment.CommenterUsername}}" href="/users/{{.Comment.CommenterUsername}}" class="icon-container
+							{{if not .Comment.CommenterHideOnline}}
+								{{if .Comment.CommenterOnline}}
+									online
+								{{else}}
+									offline
+								{{end}}
+							{{end}}
+							{{if .Comment.CommenterRoleImage}} official-user"><img src="{{.Comment.CommenterRoleImage}}" class="official-tag">{{else}}">{{end}}<img src="{{.Comment.CommenterIcon}}" class="icon">
+						</a>
+						<div class="user-name-content">
+							{{if .Comment.CommenterRoleOrganization}}<p class="user-organization">{{.Comment.CommenterRoleOrganization}}</p>{{end}}
+							<p class="user-name"><a href="/users/{{.Comment.CommenterUsername}}"{{if .Comment.CommenterColor}} style="color:{{.Comment.CommenterColor}}"{{end}}>{{.Comment.CommenterNickname}}</a></p>
+							<p class="timestamp-container">
+								<span class="spoiler-status{{if .Comment.Pinned}} spoiler{{end}}">Pinned ·</span>
+								{{if .Post.Privacy}}<span class="spoiler-status spoiler">Private ·</span>{{end}}
+								<span class="spoiler-status{{if .Comment.IsSpoiler}} spoiler{{end}}">Spoilers ·</span>
+								<span class="timestamp">
+									<span class="update" time="{{.Comment.CreatedAtUnix}}000">{{.Comment.CreatedAt}}</span>
+									{{if .Comment.EditedAt}}
+										(Edited <span class="update" time="{{.Comment.EditedAtUnix}}000">{{.Comment.EditedAt}}</span>)
+									{{end}}
+								</span>
+							</p>
+						</div>
+					</div>
+					<div class="body">
+						{{if .Comment.IsRMByAdmin}}
+							<p class="deleted-message">
+                                Deleted by administrator.<br>
+                                Comment ID: #{{.Comment.ID}}
+                            </p>
+						{{end}}
+						{{if or (not .Comment.IsRMByAdmin) .Comment.ByMe}}
+							{{if and (eq .Comment.CreatedBy .CurrentUser.ID) (not (eq .Comment.PostType 1))}}
+								<div id="post-edit" class="none">
+									<form data-action="/comments/{{.Comment.ID}}/edit" id="edit-form" method="post">
+										<div class="feeling-selector js-feeling-selector test-feeling-selector"><label class="symbol feeling-button feeling-button-normal checked"><input type="radio" name="feeling_id" value="0"{{if eq .Comment.Feeling 0}} checked{{end}}><span class="symbol-label">normal</span></label><label class="symbol feeling-button feeling-button-happy"><input type="radio" name="feeling_id" value="1"{{if eq .Comment.Feeling 1}} checked{{end}}><span class="symbol-label">happy</span></label><label class="symbol feeling-button feeling-button-like"><input type="radio" name="feeling_id" value="2"{{if eq .Comment.Feeling 2}} checked{{end}}><span class="symbol-label">like</span></label><label class="symbol feeling-button feeling-button-surprised"><input type="radio" name="feeling_id" value="3"{{if eq .Comment.Feeling 3}} checked{{end}}><span class="symbol-label">surprised</span></label><label class="symbol feeling-button feeling-button-frustrated"><input type="radio" name="feeling_id" value="4"{{if eq .Comment.Feeling 4}} checked{{end}}><span class="symbol-label">frustrated</span></label><label class="symbol feeling-button feeling-button-puzzled"><input type="radio" name="feeling_id" value="5"{{if eq .Comment.Feeling 5}} checked{{end}}><span class="symbol-label">puzzled</span></label></div>
+										<div class="textarea-container"><textarea name="body" class="textarea-text textarea" maxlength="2000" placeholder="Edit your comment." data-required>{{.Comment.BodyText}}</textarea></div>
+										<div class="post-form-footer-options">
+											<label class="spoiler-button symbol"><input id="is_spoiler" name="is_spoiler" type="checkbox" value="1"{{if .Comment.IsSpoiler}} checked{{end}}>Spoilers</label>
+										</div>
+										<div class="form-buttons">
+											<button type="button" class="cancel-button gray-button">Cancel</button>
+											<button type="submit" class="post-button black-button">Submit</button>
+										</div>
+									</form>
+								</div>
+							{{else if .CurrentUser.ID}}
+								<div id="report-violation-page" class="dialog none" data-modal-types="report report-violation" data-is-template="1">
+									<div class="dialog-inner">
+										<div class="window">
+											<h1 class="window-title">Report Violation to Indigo Administrators</h1>
+											<div class="window-body">
+											<p class="description">
+												You are about to report a comment with content which violates the Indigo rules. This report will be sent to Indigo's administrators and not to the creator of the post.</p>
+												<form method="post" action="/comments/{{.Comment.ID}}/violations">
+													<input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+													<p class="select-button-label">Violation Type: </p>
+													<select name="type" class="cannot-report-spoiler">
+														<option selected value>Please make a selection.</option>
+														{{range $index, $reason := .Reasons}}
+															{{if $reason.Enabled}}
+																<option value="{{$index}}"{{if $reason.BodyRequired}} data-body-required="1"{{end}}>{{$reason.Name}}</option>
+															{{end}}
+														{{end}}
+													</select>
+													<select name="type" class="can-report-spoiler">
+														<option selected value>Please make a selection.</option>
+														<option value="spoiler" data-body-required="1" data-track-action="Spoiler">Spoiler</option>
+														{{range $index, $reason := .Reasons}}
+															{{if $reason.Enabled}}
+																<option value="{{$index}}"{{if $reason.BodyRequired}} data-body-required="1"{{end}}>{{$reason.Name}}</option>
+															{{end}}
+														{{end}}
+													</select>
+													<textarea name="body" class="textarea" maxlength="100" data-placeholder="Enter a reason for the report."></textarea>
+													<p class="post-id">Reply ID: #{{.Comment.ID}}</p>
+													<div class="form-buttons">
+														<input type="button" class="olv-modal-close-button gray-button" value="Cancel">
+														<input type="submit" class="post-button black-button" value="Submit Report" data-url-id="{{.Comment.ID}}" data-track-action="openReportModal">
+													</div>
+												</form>
+											</div>
+										</div>
+									</div>
+								</div>
+							{{end}}
+							<div id="the-post">
+								{{if eq .Comment.PostType 1}}
+									<div class="reply-content-memo">
+										<img class="reply-memo" src="{{.Comment.BodyText}}">
+									</div>
+								{{else}}
+									<div class="reply-content-text">{{.Comment.Body}}</div>
+								{{end}}
+								{{if .Comment.Image}}
+									{{if eq .Comment.AttachmentType 1}}
+										<div class="screenshot-container">
+											<audio controls preload="none" src="{{.Comment.Image}}"></audio>
+										</div>
+									{{else if eq .Comment.AttachmentType 2}}
+										<div class="screenshot-container video">
+											<video controls preload="none" src="{{.Comment.Image}}"></video>
+										</div>
+									{{else}}
+										<div class="screenshot-container still-image">
+											<img src="{{.Comment.Image}}">
+										</div>
+									{{end}}
+								{{end}}
+								{{if .Comment.URL}}
+									{{if eq .Comment.URLType 1}}
+										<div class="screenshot-container video">
+											<iframe width="490" height="276" src="https://www.youtube.com/embed/{{.Comment.URL}}" frameborder="0" allowfullscreen="true"></iframe>
+										</div>
+									{{else if eq .Comment.URLType 2}}
+										<div class="screenshot-container video">
+											<iframe width="490" height="276" src="https://open.spotify.com/embed/track/{{.Comment.URL}}" frameborder="0"></iframe>
+										</div>
+									{{else if eq .Comment.URLType 3}}
+										<div class="screenshot-container video audio">
+											<iframe class="audio" width="490" height="276" src="https://w.soundcloud.com/player/?url={{.Comment.URL}}&auto_play=false&show_artwork=true&color=8000ff" frameborder="0" allowfullscreen="true"></iframe>
+										</div>
+									{{else}}
+										<p class="url-link">
+											<a class="link-confirm" href="{{.Comment.URL}}" target="_blank">{{.Comment.URL}}</a>
+										</p>
+									{{end}}
+								{{end}}
+								{{if .URL}}
+									{{if eq .URLType 1}}
+										<div class="screenshot-container video">
+											<iframe src="https://www.youtube.com/embed/{{.URL}}" width="490" height="276" frameborder="0" allowfullscreen="true"></iframe>
+										</div>
+									{{else if eq .URLType 2}}
+										<div class="screenshot-container video">
+											<iframe src="https://open.spotify.com/embed/track/{{.URL}}" width="490" height="276" frameborder="0" allow="encrypted-media"></iframe>
+										</div>
+									{{else if eq .URLType 3}}
+										<div class="screenshot-container video audio">
+											<iframe class="audio" src="https://w.soundcloud.com/player/?url={{.URL}}&auto_play=false&show_artwork=true&color=8000ff" frameborder="0"></iframe>
+										</div>
+									{{else}}
+										<p class="url-link">
+											<a class="link-confirm" href="{{.URL}}" target="_blank">{{.URL}}</a>
+										</p>
+									{{end}}
+								{{end}}
+							{{end}}
+							{{if not .Comment.IsRMByAdmin}}
+								<div class="post-meta">
+									<button type="button" {{if not .Comment.CanYeah}}disabled{{end}} class="symbol submit yeah-button
+									{{if .Comment.Yeahed}} yeah-added{{end}}
+									" data-feeling="{{.Comment.Feeling}}" data-action="/comments/{{.Comment.ID}}/yeah" data-url-id="{{.Comment.ID}}">
+										<span class="yeah-button-text">
+											{{if .Comment.Yeahed}}
+												{{if eq .Comment.Feeling 6}}
+													Unepic
+												{{else if eq .Comment.Feeling 7}}
+													Unnyeah
+												{{else if eq .Comment.Feeling 8}}
+													Unyes
+												{{else if eq .Comment.Feeling 9}}
+													olv.portal.miitoo.delete
+												{{else}}
+													Unyeah
+												{{end}}
+											{{else}}
+												{{if eq .Comment.Feeling 2}}
+													Yeah♥
+												{{else if eq .Comment.Feeling 3}}
+													Yeah!?
+												{{else if or (eq .Comment.Feeling 4) (eq .Comment.Feeling 5)}}
+													Yeah...
+												{{else if eq .Comment.Feeling 6}}
+													Epic!
+												{{else if eq .Comment.Feeling 7}}
+													Nyeah~♥
+												{{else if eq .Comment.Feeling 8}}
+													Yes!
+												{{else if eq .Comment.Feeling 9}}
+													olv.portal.miitoo.
+												{{else}}
+													Yeah!
+												{{end}}
+											{{end}}
+										</span>
+									</button>
+									<div class="yeah symbol"><span class="symbol-label">Yeahs</span><span class="yeah-count">{{.Comment.YeahCount}}</span></div>
+								</div>
+							</div>
+							<div id="yeah-content"{{if not (or (.Yeahs) (.Comment.Yeahed))}} class="none"{{end}}>
+								<a href="/users/{{.CurrentUser.Username}}" class="post-permalink-feeling-icon visitor"{{if not .Comment.Yeahed}} style="display:none"{{end}}>
+									<img src="{{.CurrentUser.Avatar}}" class="user-icon">
+								</a>
+								{{range $yeah := .Yeahs}}
+									<a href="/users/{{$yeah.Username}}" id="{{$yeah.ID}}" class="post-permalink-feeling-icon">
+										<img src="{{$yeah.Avatar}}" class="user-icon">
+									</a>
+								{{end}}
+							</div>
+						{{end}}
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+{{if .Pjax}}
+	{{template "footer.html"}}
+{{end}}

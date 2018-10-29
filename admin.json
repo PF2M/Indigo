@@ -1,0 +1,28 @@
+{
+    "Manage": {
+        "MinimumLevel": 1,
+        "AvailableManagers": [
+            {
+                "Name": "posts",
+                "MinimumLevel": 1,
+                "Query": "SELECT *, CONCAT(IF(is_rm_by_admin = 1, '[DELETED BY ADMIN] ', IF(is_rm = 1, '[DELETED] ', '')), body) AS __str__ FROM posts LEFT JOIN users ON created_by = users.id ORDER BY posts.created_at DESC LIMIT 50 OFFSET ?",
+                "Viewable": ["id", "created_by", "community_id", "created_at", "edited_at", "feeling", "body", "image", "attachment_type", "url", "url_type", "is_spoiler", "is_rm", "is_rm_by_admin", "poll", "pinned", "privacy", "repost", "username"],
+                "Editable": ["community_id", "feeling", "body", "image", "attachment_type", "url", "url_type", "is_spoiler", "is_rm_by_admin", "repost"],
+                "Searchable": ["created_by", "community_id", "created_at", "edited_at", "feeling", "body", "attachment_type", "url", "url_type", "is_spoiler", "poll", "pinned", "privacy", "repost"],
+                "Icon": "avatar"
+            },
+            {
+                "Name": "users",
+                "MinimumLevel": 1,
+                "Query": "SELECT *, CONCAT(nickname, ' (', username, ')') AS __str__ FROM users LEFT JOIN profiles ON users.id = user ORDER BY users.id DESC LIMIT 50 OFFSET ?",
+                "Viewable": ["id", "username"],
+                "Editable": ["username"],
+                "Searchable": ["username", "nickname"],
+                "Icon": "avatar"
+            }
+        ]
+    },
+    "Settings": {
+        "MinimumLevel": 9
+    }
+}

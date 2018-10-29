@@ -1,0 +1,60 @@
+{{if eq .Offset 20}}
+    {{if .Pjax}}
+        {{template "header.html" .}}
+        {{if eq .Action "/communities/search"}}<meta property="og:description" content="Search for communities here.">{{end}}
+    {{else}}
+        <title>{{.Title}} - Indigo</title>
+    {{end}}
+    <div id="main-body" class="is-autopagerized" csrf-token="">
+        {{template "general_sidebar.html" .}}
+        <div class="main-column search">
+            <div class="post-list-outline search-content">
+                <h2 class="label">{{.Title}}</h2>
+            <form class="search" action="{{.Action}}">
+                <input type="text" name="query" value="{{.Query}}" placeholder="{{if eq .Action "/users"}}Mario's Princess, MarioPrincess9, etc.{{else}}Undertale, etc.{{end}}" maxlength="32" required>
+                <input type="submit" value="q" title="Search">
+            </form>
+            {{if .Users}}<p class="user-found note">Found: {{.Query}}</p>{{end}}
+                <div class="list follow-list">
+{{end}}
+                    <ul class="list-content-with-icon-and-text arrow-list" id="friend-list-content" data-next-page-url="{{if .Users}}?&offset={{.Offset}}{{end}}">
+                        {{if .Users}}
+                            {{range $user := .Users}}
+                                <li class="trigger" data-href="/{{if eq $.Action "/communities/search"}}communities/{{$user.ID}}{{else}}users/{{$user.Username}}{{end}}">
+                                    <a href="/{{if eq $.Action "/communities/search"}}communities/{{$user.ID}}{{else}}users/{{$user.Username}}{{end}}" class="icon-container
+                                    {{if not (eq $.Action "/communities/search")}}
+                                        {{if not $user.HideOnline}}
+                                            {{if $user.Online}}
+                                                online
+                                            {{else}}
+                                                offline
+                                            {{end}}
+                                        {{end}}
+                                    {{if $user.Role.Image}} official-user"><img src="{{$user.Role.Image}}" class="official-tag">{{else}}">{{end}}
+                                    {{else}}">{{end}}<img src="{{$user.Avatar}}" class="icon"></a>
+                                    <div class="body">
+                                        <p class="title">
+                                            <span class="nick-name"><a href="/{{if eq $.Action "/communities/search"}}communities/{{$user.ID}}{{else}}users/{{$user.Username}}{{end}}"{{if $user.Color}} style="color:{{$user.Color}}"{{end}}>{{$user.Nickname}}</a></span>
+                                            <span class="id-name">{{$user.Username}}</span>
+                                        </p>
+                                        <p class="text">{{$user.Comment}}</p>
+                                    </div>
+                                </li>
+                            {{end}}
+                        {{else}}
+                            {{if eq .Offset 20}}
+                                <div class="no-content">
+                                    <p>"{{.Query}}" could not be found.<br>Try entering another query or retry your search later.</p>
+                                </div>
+                            {{end}}
+                        {{end}}
+                    </ul>
+{{if eq .Offset 20}}
+                </div>
+            </div>
+        </div>
+    </div>
+    {{if .Pjax}}
+        {{template "footer.html"}}
+    {{end}}
+{{end}}

@@ -1,0 +1,57 @@
+{
+	"Port": ":80",
+	"SSL": {
+		"Enabled": false,
+		"Certificate": "",
+		"Key": ""
+	},
+	"DB": {
+		"Host": "localhost",
+		"Username": "root",
+		"Password": "",
+		"Name": "indigo"
+	},
+	"ImageHost": {
+		"Provider": "cloudinary",
+		"Username": "insert-cloud-name-here",
+		"APIEndpoint": "https://api.cloudinary.com",
+		"APIPublic": "",
+		"APISecret": "",
+		"ImageEndpoint": "",
+		"UploadPreset": "insert-unsigned-upload-preset-here",
+		"MaxUploadSize": ""
+	},
+	"Webhooks": {
+		"Enabled": false,
+		"Reports": "",
+		"Signups": "",
+		"Logins": ""
+	},
+	"ReCAPTCHA": {
+		"Enabled": false,
+		"SiteKey": "",
+		"SecretKey": ""
+	},
+	"SMTP": {
+		"Enabled": false,
+		"Hostname": "",
+		"Port": ":25",
+		"Email": "",
+		"Password": ""
+	},
+	"CSRFSecret": "105261EE7CDCB065B095B9FE3FE35F0C",
+	"IPHubKey": "",
+	"Proxy": false,
+	"ForceLogins": false,
+	"AllowSignups": true,
+	"DefaultTimezone": "America/New_York",
+	"ReportReasons": [
+		{
+			"Name": "Rulebreaking Content",
+			"Message": "Your post broke the rules, so it was removed.",
+			"Enabled": true,
+			"BodyRequired": false
+		}
+	],
+	"EmoteLimit": 5
+}

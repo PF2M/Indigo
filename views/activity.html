@@ -1,0 +1,14 @@
+{{if .Posts}}
+	<div class="list post-list js-post-list" data-next-page-url="?offset={{.Offset}}">
+		{{$user_id := .CurrentUser.ID}}
+		{{range $post := .Posts}}
+			{{template "render_post.html" $post}}
+		{{end}}
+	</div>
+{{else}}
+	{{if eq .Offset 20}}
+		<div class="post-list-outline no-content no-post-content">
+			<p>The Activity Feed is empty.<br>Why not follow some users?</p>
+		</div>
+	{{end}}
+{{end}}

@@ -1,0 +1,51 @@
+{{template "header.html" .}}
+<meta property="og:description" content="Request a password reset here.">
+<div id="main-body" class="guest">
+	<div class="main-column center">
+		<div class="post-list-outline login-page">
+			<form method="post">
+                {{.CSRFField}}
+				<img src="/assets/img/menu-logo.png" alt="Indigo">
+                <p class="lh">Reset Password{{if .Username}} for {{.Username}}{{end}}{{if .Error}} Error{{end}}</p>
+                {{if eq .Action "request"}}
+                    <p>Forgot your password or accidentally gave it to someone who shouldn't have it? Don't worry, we've got you covered. Just type your email here and we'll send you a link to change it!</p>
+                    <h3 class="label">
+                        <label>
+                            Email address: <input type="text" class="auth-input" name="email" maxlength="255" placeholder="indigo@pf2m.com">
+                        </label>
+                    </h3>
+                    <button type="submit" class="button">Send</button>
+                {{else if eq .Action "sent"}}
+                    <p>Success! The email was sent to <strong>{{.Email}}</strong>.</p>
+                    <p>Note that the message may be in your "Junk" or "Spam" boxes, so if you can't find it check there. The message may also take a while to send.</p>
+                    <p>Until then, you can <a href="/">click here to continue browsing the website if you want.</a></p>
+                {{else if eq .Action "reset"}}
+                    <p>Hooray, you got the email! You're almost done now. Just enter in your new password twice (to make sure you don't misspell it) and hit that nice little button below, it's called the "reset button".</p>
+                    <h3 class="label">
+                        <label>
+                            Password: <input type="password" class="auth-input" name="password" maxlength="255" placeholder="hunter2">
+                        </label>
+                    </h3>
+                    <h3 class="label">
+                        <label>
+                            Confirm Password: <input type="password" class="auth-input" name="confirm" maxlength="255" placeholder="hunter2">
+                        </label>
+                    </h3>
+                    {{if .Error}}<p class="red" style="margin-bottom:6px">{{.Error}}</p>{{end}}
+                    <button type="submit" class="button">Reset</button>
+                {{else if eq .Action "success"}}
+                    <p>The reset operation was successful! You can now <a href="/login">log into your account</a> with your new password.</p>
+                    <p>Thanks for using Indigo!</p>
+                {{else if eq .Action "error"}}
+                    <p>{{.Error}}</p>
+                {{else if eq .Action "disabled"}}
+                    <p>Password resets are not enabled on this instance of Indigo.</p>
+                    <p>To remedy this, tell the owner of the service to set up an SMTP server and specify it in their Indigo configuration.</p>
+                    <p>You can learn how to do this <a href="https://github.com/PF2M/Indigo/wiki">on the Indigo GitHub's Wiki page.</a></p>
+                {{end}}
+                <br>
+			</form>
+		</div>
+	</div>
+</div>
+{{template "footer.html"}}

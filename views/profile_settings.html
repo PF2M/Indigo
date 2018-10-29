@@ -1,0 +1,277 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body" class="profile-top">
+  {{template "profile_sidebar.html" .Sidebar}}
+  <div class="main-column">
+    <div class="post-list-outline">
+      <h2 class="label">{{.Title}}</h2>
+      <form class="setting-form" method="post" action="/settings/profile">
+        <input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+        <ul class="settings-list">
+          <li class="setting-nickname">
+            <p class="settings-label">Nickname</p>
+            <div class="center center-input">
+              <input type="text" name="screen_name" maxlength="32" placeholder="Nickname" value="{{.User.Nickname}}">
+            </div>
+            <p class="note">Nickname, up to 32 characters.</p>
+          </li>
+          <li class="setting-profile-comment">
+            <span class="character-count" id="character-count">{{if not .Profile.CommentText}}2000{{end}}</span>
+            <p class="settings-label">Profile Comment</p>
+            <textarea class="textarea-text textarea" name="profile_comment" maxlength="2000" placeholder="Write about yourself here.">{{.Profile.CommentText}}</textarea>
+            <p class="note">Write anything you'd like to be shown on your profile. Just make sure it doesn't violate <a href="/rules/">our rules.</a></p>
+          </li>
+          <li class="setting-country">
+            <p class="settings-label">Region</p>
+            <div class="center center-input">
+              <input type="text" name="country" maxlength="64" placeholder="Region" value="{{.Profile.Region}}">
+            </div>
+            <p class="note">Enter your region here. It'll appear on your profile.<br>
+              <a class="get-ipinfo" href="#">If you want to use your location, you can grab it here (it will not be saved automatically).</a>
+            </p>
+          </li>
+          <li class="setting-website">
+            <p class="settings-label">DiscordTag</p>
+            <div class="center center-input">
+              <input type="text" name="discord" maxlength="37" placeholder="Enter your DiscordTag here." value="{{.Profile.Discord}}">
+            </div>
+          </li>
+          <li class="setting-website">
+            <p class="settings-label">YouTube Channel/URL</p>
+            <div class="center center-input">
+              <input type="text" name="website" maxlength="1024" placeholder="YouTube Channel or URL" value="{{.Profile.YouTube}}">
+            </div>
+            <p class="note">Add your YouTube channel or a random URL here.</p>
+          </li>
+          <li class="setting-website">
+            <p class="settings-label">PlayStation Network Username</p>
+            <div class="center center-input">
+              <input type="text" name="psn" maxlength="16" placeholder="Enter your PlayStation Network account here." value="{{.Profile.PSN}}">
+            </div>
+        </li>
+        <li class="setting-website">
+          <p class="settings-label">Nintendo Switch Friend Code</p>
+          <div class="center center-input">
+            <input type="text" name="switch_code" maxlength="17" placeholder="Enter your Nintendo Switch friend code here." value="{{.Profile.SwitchCode}}">
+          </div>
+          <p class="note">We recommend that you include the "SW-" at the start and seperate the numbers with dashes.</p>
+        </li>
+        <li class="setting-website">
+          <p class="settings-label">Twitter</p>
+          <div class="center center-input">
+            <input type="text" name="external" maxlength="15" placeholder="Enter your Twitter account here." value="{{.Profile.Twitter}}">
+          </div>
+          <p class="note">Don't add an "@" symbol at the start if you want it to be linked on your profile.</p>
+        </li>
+        <li class="setting-website">
+            <p class="settings-label">Steam</p>
+            <div class="center center-input">
+          <input type="text" name="steam" maxlength="64" placeholder="Enter your Steam username here." value="{{.Profile.Steam}}">
+        </div>
+        </li>
+          <li class="setting-color">
+            <p class="settings-label">Nickname Color</p>
+            <div class="center center-input">
+              <input type="color" class="color-value" name="color" maxlength="7" value="{{.User.Color}}">
+              <button type="button" class="button color-thing none">Open color picker</button><br>
+              <button type="button" class="button default-color">Reset to default</button>
+            </div>
+            <p class="note">This is the color your nickname will appear as.</p>
+            <div id="sidebar-profile-body">
+              <div username="{{.User.Username}}" class="icon-container
+              {{if not .User.HideOnline}}
+                  {{if .User.Online}}
+                      online
+                  {{else}}
+                      offline
+                  {{end}}
+              {{end}}
+              {{if .User.Role.Image}} official-user"><img src="{{.User.Role.Image}}" class="official-tag">{{else}}">{{end}}
+                <a href="/users/{{.User.Username}}"><img src="{{.User.Avatar}}" alt="{{.User.Username}}" class="icon"></a>
+                </div>
+                {{if .User.Role.Organization}}<p class="user-organization">{{.User.Role.Organization}}</p>{{end}}
+                <a href="/users/{{.User.Username}}" class="nick-name"{{if .User.Color}} style="color:{{.User.Color}}"{{end}}>{{.User.Nickname}}</a>
+                <p class="id-name">{{.User.Username}}</p>
+            </div>
+          </li>
+          <li class="setting-color">
+            <p class="settings-label">Theme Color</p>
+            <div class="center center-input">
+              <input type="color" class="color-value" name="theme" maxlength="7" value="{{if .User.Theme}}{{index .User.ThemeColors 0}}{{else}}#8000ff{{end}}">
+              <button type="button" class="button color-thing none">Open color picker</button><br>
+              <button type="button" class="button default-color">Reset to default</button>
+            </div>
+            <p class="note">This is the color that will be shown on the site's menus, as well as on your profile to everyone else.</p>
+          </li>
+          <li>
+            <p class="settings-label"><label for="id_visibility">Who should be able to see your Nintendo Network ID?</label></p>
+            <div class="select-content">
+              <div class="select-button">
+                <select name="id_visibility" id="id_visibility">
+                  <option value="0"{{if eq .Profile.NNIDVisibility 0}} selected{{end}}>Everyone</option>
+                  <option value="1"{{if eq .Profile.NNIDVisibility 1}} selected{{end}}>My friends</option>
+                  <option value="2"{{if eq .Profile.NNIDVisibility 2}} selected{{end}}>Nobody</option>
+                </select>
+              </div>
+            </div>
+          </li>
+          <li>
+            <p class="settings-label"><label for="let_friendrequest">Who should be able to send you friend requests?</label></p>
+            <div class="select-content">
+              <div class="select-button">
+                <select name="let_friendrequest" id="let_friendrequest">
+                  <option value="0"{{if eq .Profile.AllowFriend 0}} selected{{end}}>Everyone</option>
+                  <option value="1"{{if eq .Profile.AllowFriend 1}} selected{{end}}>People I'm following</option>
+                  <option value="2"{{if eq .Profile.AllowFriend 2}} selected{{end}}>Nobody</option>
+                </select>
+              </div>
+            </div>
+          </li>
+          <li>
+            <p class="settings-label"><label for="pronoun_dot_is">What's your preferred pronoun?</label></p>
+            <div class="select-content">
+              <div class="select-button">
+                <select name="pronoun_dot_is" id="pronoun_dot_is">
+                  <option value="0"{{if eq .Profile.Gender ""}} selected{{end}}>Prefer not to say</option>
+                  <option value="1"{{if eq .Profile.Gender "He/him"}} selected{{end}}>He/him</option>
+                  <option value="2"{{if eq .Profile.Gender "She/her"}} selected{{end}}>She/her</option>
+                  <option value="3"{{if eq .Profile.Gender "He/she"}} selected{{end}}>He/she</option>
+                  <option value="4"{{if eq .Profile.Gender "Nonbinary"}} selected{{end}}>Nonbinary</option>
+                  <option value="5"{{if eq .Profile.Gender "They/them"}} selected{{end}}>They/them</option>
+                </select>
+              </div>
+            </div>
+          </li>
+          <li>
+            <p class="settings-label"><label for="yeahs_visibility">Who should be able to see your Yeahs given?</label></p>
+            <div class="select-content">
+              <div class="select-button">
+                <select name="yeahs_visibility" id="yeahs_visibility">
+                  <option value="0"{{if eq .Profile.YeahVisibility 0}} selected{{end}}>Everyone</option>
+                  <option value="1"{{if eq .Profile.YeahVisibility 1}} selected{{end}}>My friends</option>
+                  <option value="2"{{if eq .Profile.YeahVisibility 2}} selected{{end}}>Nobody</option>
+                </select>
+              </div>
+            </div>
+          </li>
+          <li>
+            <p class="settings-label"><label for="comments_visibility">Who should be able to see your comments made?</label></p>
+            <div class="select-content">
+              <div class="select-button">
+                <select name="comments_visibility" id="comments_visibility">
+                  <option value="0"{{if eq .Profile.ReplyVisibility 0}} selected{{end}}>Everyone</option>
+                  <option value="1"{{if eq .Profile.ReplyVisibility 1}} selected{{end}}>My friends</option>
+                  <option value="2"{{if eq .Profile.ReplyVisibility 2}} selected{{end}}>Nobody</option>
+                </select>
+              </div>
+            </div>
+          </li>
+          <li>
+            <p class="settings-label"><label for="comments_visibility">What should the default privacy setting for your posts be?</label></p>
+            <div class="select-content">
+              <div class="select-button">
+                <select name="default_privacy">
+                  <option value="0"{{if eq .User.DefaultPrivacy 0}} selected{{end}}>Everyone</option>
+                  <option value="1"{{if eq .User.DefaultPrivacy 1}} selected{{end}}>Friends, Following and Followers</option>
+                  <option value="2"{{if eq .User.DefaultPrivacy 2}} selected{{end}}>Friends and Following</option>
+                  <option value="3"{{if eq .User.DefaultPrivacy 3}} selected{{end}}>Friends and Followers</option>
+                  <option value="4"{{if eq .User.DefaultPrivacy 4}} selected{{end}}>Friends Only</option>
+                  <option value="5"{{if eq .User.DefaultPrivacy 5}} selected{{end}}>Followers and Following</option>
+                  <option value="6"{{if eq .User.DefaultPrivacy 6}} selected{{end}}>Followers Only</option>
+                  <option value="7"{{if eq .User.DefaultPrivacy 7}} selected{{end}}>Following Only</option>
+                  <option value="8"{{if eq .User.DefaultPrivacy 8}} selected{{end}}>Admins Only</option>
+                  <option value="9"{{if eq .User.DefaultPrivacy 9}} selected{{end}}>Only Me</option>
+                </select>
+              </div>
+            </div>
+          </li>
+          <li class="setting-profile-comment">
+            <p class="settings-label">Forbidden Keywords</p>
+            <textarea class="textarea" name="forbidden_keywords" maxlength="2000" placeholder="Put anything you don't want to see here.">{{.User.ForbiddenKeywords}}</textarea>
+            <p class="note">Posts or comments that contain any of the keywords you type here will be hidden from your view. Seperate each phrase with a comma (","), and type "\," to look for an actual  comma. (and type "\\," to actually find "\,")</p>
+            <p class="note">Example: "arian,kordi,closedverse"</p>
+          </li>
+          <li class="setting-nickname">
+            <p class="settings-label">Email Address</p>
+            <div class="center center-input">
+              <input type="text" name="email" maxlength="255" placeholder="Email Address" value="{{.User.Email}}">
+            </div>
+            <p class="note">Enter your email address here. This will not be displayed on your profile.</p>
+          </li>
+          <li class="setting-nnid">
+            <p class="settings-label">Nintendo Network ID</p>
+            <div class="icon-container">
+              <img class="icon nnid-icon mii" src="{{if .Profile.MiiHash}}https://mii-secure.cdn.nintendo.net/{{.Profile.MiiHash}}_normal_face.png{{else}}/assets/img/anonymous.png{{end}}">
+            </div>
+            <input type="text" name="nnid" minlength="6" maxlength="16" placeholder="Nintendo Network ID" value="{{.Profile.NNID}}" data-action="/miis">
+            <input type="hidden" name="mh" value="{{.Profile.MiiHash}}">
+            <p class="error"></p>
+            <p class="note">Enter your Nintendo Network ID here. It'll appear on your profile if you set it to be visible.</p>
+            </li>
+          <li class="setting-avatar">
+            <div class="icon-container">
+              <img class="icon nnid-icon avatar preview-image {{if .User.HasMii}} none{{end}}" src="{{if .Profile.AvatarImage}}{{.Profile.AvatarImage}}{{else}}/assets/img/anonymous.png{{end}}">
+              <img class="icon nnid-icon mii{{if not .User.HasMii}} none{{end}}" src="{{if .Profile.MiiHash}}https://mii-secure.cdn.nintendo.net/{{.Profile.MiiHash}}_normal_face.png{{else}}/assets/img/anonymous.png{{end}}">
+            </div>
+            <p class="settings-label">Do you want the avatar shown beside your content to use the Mii from your Nintendo Network ID or an avatar?</p>
+            <label class="checked"><input type="radio" name="avatar" value="0"{{if not .User.HasMii}} checked{{end}}>Avatar</label>
+            <label><input type="radio" name="avatar" value="1"{{if .User.HasMii}} checked{{end}}>Mii</label>
+            <label class="file-button-container">
+              <span class="input-label">Avatar Image <span>PNG, JPEG and GIF files are allowed.</span></span>
+              <span class="button file-upload-button for-avatar">Upload</span>
+              <input accept="image/*" type="file" class="file-button none">
+              <input type="hidden" name="image" value="{{.Profile.AvatarID}}">
+              <script src="/assets/js/upload.js"></script>
+            </label>
+          </li>
+          {{if .Migrations}}
+            <li>
+              <p class="settings-label">Import Posts</p>
+              <p class="note">You can import your posts from other websites using this tool.</p>
+              {{range $migration := .Migrations}}
+                <div class="migration">
+                  <img src="{{$migration.Image}}">
+                  <button type="button" class="migrate-button{{if $migration.PasswordRequired}} password-required{{end}}" data-action="/migrate/{{$migration.ID}}">Import</button>
+                </div>
+              {{end}}
+              {{if .Imports}}
+                <button type="button" class="past-imports-button">Past Imports</button>
+                <div class="dialog past-imports none">
+                  <div class="dialog-inner">
+                    <div class="window">
+                      <h1 class="window-title">Past Imports</h1>
+                      <div class="window-body">
+                        <p class="description">Here you can view your past post imports, and undo them if you wish.</p>
+                        <div class="overflow-scroll">
+                          {{range $import := .Imports}}
+                            <div class="migration">
+                              <img src="{{$import.Image}}">
+                              <span class="import-name">{{$import.Username}}</span>
+                              <button type="button" class="migrate-button" data-action="/rollback/{{$import.ID}}">Undo</button>
+                            </div>
+                          {{end}}
+                        </div>
+                        <div class="form-buttons">
+                          <input type="button" class="post-button black-button" value="Close">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              {{end}}
+            </li>
+          {{end}}
+          <div class="form-buttons">
+            <input type="submit" class="black-button apply-button" value="Save these settings">
+          </div>
+        </ul>
+      </form>
+    </div>
+  </div>
+</div>
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}

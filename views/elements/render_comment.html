@@ -1,0 +1,126 @@
+<li id="{{.ID}}"{{if not .IsRMByAdmin}} data-href{{if and .IsSpoiler (not .ByMii)}}-hidden{{end}}="/comments/{{.ID}}"{{end}} class="post {{if .ByMe}}my{{else}}other{{end}}{{if not .IsRMByAdmin}} trigger{{end}}{{if and (or .IsSpoiler .IsRMByAdmin) (not .ByMii)}} hidden{{end}}">
+    <a href="/users/{{.CommenterUsername}}" username="{{.CommenterUsername}}" class="icon-container
+        {{if not .CommenterHideOnline}}
+            {{if .CommenterOnline}}
+                online
+            {{else}}
+                offline
+            {{end}}
+        {{end}}
+        {{if .CommenterRoleImage}} official-user"><img src="{{.CommenterRoleImage}}" class="official-tag">{{else}}">{{end}}
+        <img src="{{.CommenterIcon}}" class="icon">
+    </a>
+    <div class="body">
+        <div class="header">
+            <p class="user-name"><a href="/users/{{.CommenterUsername}}"{{if .CommenterColor}} style="color:{{.CommenterColor}}"{{end}}>{{.CommenterNickname}}</a></p>
+            <p class="timestamp-container">
+                <a class="timestamp"{{if not .IsRMByAdmin}} href="/comments/{{.ID}}"{{end}}>
+					<span class="update" time="{{.CreatedAtUnix}}000">{{.CreatedAt}}</span>
+					{{if .EditedAt}}
+						(Edited <span class="update" time="{{.EditedAtUnix}}000">{{.EditedAt}}</span>)
+					{{end}}
+				</a>
+                <span class="spoiler-status{{if .Pinned}} spoiler{{end}}"> · Pinned</span>
+                <span class="spoiler-status{{if .IsSpoiler}} spoiler{{end}}"> · Spoilers</span>
+            </p>
+        </div>
+        {{if .IsRMByAdmin}}
+            <p class="deleted-message">
+                Deleted by administrator.<br>
+                Comment ID: #{{.ID}}
+            </p>
+        {{end}}
+        {{if or (not .IsRMByAdmin) .ByMii}}
+            {{if eq .PostType 1}}
+                <div class="reply-content-memo">
+                    <img class="reply-memo" src="{{.BodyText}}">
+                </div>
+            {{else}}
+                <div class="reply-content-text">{{.Body}}</div>
+            {{end}}
+            {{if .Image}}
+                {{if eq .AttachmentType 1}}
+                    <a class="screenshot-container">
+                        <audio controls preload="none" src="{{.Image}}"></audio>
+                    </a>
+                {{else if eq .AttachmentType 2}}
+                    <div class="screenshot-container still-image">
+                        <video controls preload="none" src="{{.Image}}"></video>
+                    </div>
+                {{else}}
+                    <div class="screenshot-container still-image">
+                        <img src="{{.Image}}">
+                    </div>
+                {{end}}
+            {{end}}
+            {{if .URL}}
+                {{if eq .URLType 1}}
+                    <div class="screenshot-container video">
+                        <iframe src="https://www.youtube.com/embed/{{.URL}}" width="490" height="276" frameborder="0" allowfullscreen="true"></iframe>
+                    </div>
+                {{else if eq .URLType 2}}
+                    <div class="screenshot-container video">
+                        <iframe src="https://open.spotify.com/embed/track/{{.URL}}" width="490" height="276" frameborder="0" allow="encrypted-media"></iframe>
+                    </div>
+                {{else if eq .URLType 3}}
+                    <div class="screenshot-container video audio">
+                        <iframe class="audio" src="https://w.soundcloud.com/player/?url={{.URL}}&auto_play=false&show_artwork=true&color=8000ff" frameborder="0"></iframe>
+                    </div>
+                {{else}}
+                    <p class="url-link">
+                        <a class="link-confirm" href="{{.URL}}" target="_blank">{{.URL}}</a>
+                    </p>
+                {{end}}
+            {{end}}
+            {{if and .IsSpoiler (not .ByMii)}}
+                <div class="hidden-content">
+                    <p>This comment contains spoilers.</p>
+                    <button type="button" class="hidden-content-button">View Comment</button>
+                </div>
+            {{end}}
+        {{end}}
+        {{if not .IsRMByAdmin}}
+            <div class="reply-meta">
+                <button type="button" {{if not .CanYeah}} disabled{{end}} class="symbol submit yeah-button
+                {{if .Yeahed}} yeah-added{{end}}
+                {{if not .CanYeah}} disabled{{end}}
+                " data-is-in-reply-list="1" data-feeling="{{.Feeling}}" data-action="/comments/{{.ID}}/yeah" data-url-id="{{.ID}}">
+                    <span class="yeah-button-text">
+                        {{if .Yeahed}}
+                            {{if eq .Feeling 6}}
+                                Unepic
+                            {{else if eq .Feeling 7}}
+                                Unnyeah
+                            {{else if eq .Feeling 8}}
+                                Unyes
+                            {{else if eq .Feeling 9}}
+                                olv.portal.miitoo.delete
+                            {{else}}
+                                Unyeah
+                            {{end}}
+                        {{else}}
+                            {{if eq .Feeling 2}}
+                                Yeah♥
+                            {{else if eq .Feeling 3}}
+                                Yeah!?
+                            {{else if or (eq .Feeling 4) (eq .Feeling 5)}}
+                                Yeah...
+                            {{else if eq .Feeling 6}}
+                                Epic!
+                            {{else if eq .Feeling 7}}
+                                Nyeah~♥
+                            {{else if eq .Feeling 8}}
+                                Yes!
+                            {{else if eq .Feeling 9}}
+                                olv.portal.miitoo.
+                            {{else}}
+                                Yeah!
+                            {{end}}
+                        {{end}}
+                    </span>
+                </button>
+                <div class="yeah symbol"><span class="symbol-label">Yeahs</span><span class="yeah-count">{{.YeahCount}}</span></div>
+            </div>
+        {{end}}
+    </div>
+</li>

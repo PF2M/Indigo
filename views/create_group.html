@@ -1,0 +1,113 @@
+{{if eq .Offset 20}}
+    {{if .Pjax}}
+        {{template "header.html" .}}
+        <meta property="og:description" content="{{.Sidebar.Profile.Comment}}">
+    {{else}}
+        <title>{{.Title}} - Indigo</title>
+    {{end}}
+    <div id="main-body" class="messages">
+        {{template "general_sidebar.html" .}}
+        <div class="main-column">
+            <div class="post-list-outline">
+                <h2 class="label">
+                    {{if .Editing}}<form action="/conversations/{{.ConversationID}}/{{if .ByMe}}delete{{else}}leave{{end}}" method="post"><input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}"><button type="submit" class="button msg-update">{{if .ByMe}}Delete{{else}}Leave{{end}} Group</button></form>{{end}}
+                    Users Added
+                </h2>
+                <form method="post">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+                    <div class="list follow-list">
+                        <ul class="list-content-with-icon-and-text arrow-list" id="members">
+                            {{if .Members}}
+                                {{range $user := .Members}}
+                                    <li class="trigger" data-href="/users/{{$user.Username}}">
+                                        <a href="/users/{{$user.Username}}" username="{{$user.Username}}" class="icon-container
+                                            {{if not $user.HideOnline}}
+                                                {{if $user.Online}}
+                                                    online
+                                                {{else}}
+                                                    offline
+                                                {{end}}
+                                            {{end}}
+                                        {{if $user.Role.Image}} official-user"><img src="{{$user.Role.Image}}" class="official-tag">{{else}}">{{end}}
+                                        <img src="{{$user.Avatar}}" class="icon"></a>
+                                        <div class="toggle-button">
+                                            <button type="button" class="follow-button button symbol relationship-button none">Add</button>
+                                            <button type="button" class="button follow-done-button relationship-button symbol">Remove</button>
+                                            <input class="input" type="hidden" name="user{{$user.Level}}" value="{{$user.Username}}">
+                                        </div>
+                                        <div class="body">
+                                            <p class="title">
+                                                <span class="nick-name"><a href="/users/{{$user.Username}}"{{if $user.Color}} style="color:{{$user.Color}}"{{end}}>{{$user.Nickname}}</a></span>
+                                                <span class="id-name">{{$user.Username}}</span>
+                                            </p>
+                                            <p class="text">{{$user.Comment}}</p>
+                                        </div>
+                                    </li>
+                                {{end}}
+                                <div class="no-content none">
+                                    <p>You haven't added any users to your group yet.</p>
+                                </div>
+                            {{else}}
+                                {{if eq .Offset 20}}
+                                    <div class="no-content">
+                                        <p>You haven't added any users to your group yet.</p>
+                                    </div>
+                                {{end}}
+                            {{end}}
+                        </ul>
+                    </div>
+                    <div class="form-buttons">
+                        <input type="submit" class="black-button post-button disabled" value="{{if .Editing}}Edit{{else}}Create{{end}} Group" disabled>
+                    </div>
+                </form>
+                <h2 class="label">Add Friends</h2>
+                <div class="list follow-list">
+{{end}}
+                <ul class="list-content-with-icon-and-text arrow-list" id="friends" data-next-page-url="{{if .Users}}?&offset={{.Offset}}{{end}}">
+                    {{if .Friends}}
+                        {{range $user := .Friends}}
+                            <li class="trigger" data-href="/users/{{$user.Username}}">
+                                <a href="/users/{{$user.Username}}" class="icon-container
+                                    {{if not $user.HideOnline}}
+                                        {{if $user.Online}}
+                                            online
+                                        {{else}}
+                                            offline
+                                        {{end}}
+                                    {{end}}
+                                {{if $user.Role.Image}} official-user"><img src="{{$user.Role.Image}}" class="official-tag">{{else}}">{{end}}
+                                <img src="{{$user.Avatar}}" class="icon"></a>
+                                <div class="toggle-button">
+                                    <button type="button" class="follow-button button symbol relationship-button">Add</button>
+                                    <button type="button" class="button follow-done-button relationship-button symbol none">Remove</button>
+                                    <input class="input" type="hidden" value="{{$user.Username}}">
+                                </div>
+                                <div class="body">
+                                    <p class="title">
+                                        <span class="nick-name"><a href="/users/{{$user.Username}}"{{if $user.Color}} style="color:{{$user.Color}}"{{end}}>{{$user.Nickname}}</a></span>
+                                        <span class="id-name">{{$user.Username}}</span>
+                                    </p>
+                                    <p class="text">{{$user.Comment}}</p>
+                                </div>
+                            </li>
+                        {{end}}
+                        <div class="no-content none">
+                            <p>You've added every friend you can to the group.</p>
+                        </div>
+                    {{else}}
+                        {{if eq .Offset 20}}
+                            <div class="no-content">
+                                <p>{{if .FriendCount}}You've added every friend you can to the group.{{else}}You don't have any friends. Why don't you make some?{{end}}</p>
+                            </div>
+                        {{end}}
+                    {{end}}
+                </ul>
+{{if eq .Offset 20}}
+                </div>
+            </div>
+        </div>
+    </div>
+    {{if .Pjax}}
+        {{template "footer.html"}}
+    {{end}}
+{{end}}
