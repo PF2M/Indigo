@@ -1,0 +1,68 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body" class="profile-top">
+    {{template "general_sidebar.html" .}}
+    <div class="main-column">
+        <div class="post-list-outline">
+            <div class="body-content" id="community-top">
+                <h2 class="label">Blocked Users</h2>
+                <ul class="list news-list" {{if .Users}} data-next-page-url="/blocked?offset={{.Offset}}"{{end}}>
+                    {{if .Users}}
+                        {{range $user := .Users}}
+                            <li class="trigger" data-href="/users/{{$user.Username}}">
+                                <a href="/users/{{$user.Username}}" username="{{$user.Username}}" class="icon-container{{if not $user.HideOnline}}{{if $user.Online}} online{{else}} offline{{end}}{{end}}
+                                {{if $user.Role.Image}} official-user"><img src="{{$user.Role.Image}}" class="official-tag">{{else}}">{{end}}
+                                    <img src="{{$user.Avatar}}" alt="{{$user.Nickname}}" class="icon">
+                                </a>
+                                <div class="body">
+                                    <a href="/users/{{$user.Username}}" class="nick-name"{{if $user.Color}} style="color:{{$user.Color}}"{{end}}>{{$user.Nickname}}</a>
+                                    <span class="id-name">{{$user.Username}}</span><br>
+                                    <span class="timestamp">{{$user.LastSeen}}</span>
+                                    <button class="button received-request-button" type="button" data-user-id="{{$user.ID}}">Unblock</button>
+                                </div>
+                            </li>
+                            <div class="dialog none" data-modal-types="post-unblock" id="{{$user.ID}}">
+                                <div class="dialog-inner">
+                                    <div class="window">
+                                        <h1 class="window-title">Unblock {{$user.Nickname}}</h1>
+                                        <div class="window-body">
+                                            <div id="sidebar-profile-body">
+                                                <div username="{{$user.Username}}" class="icon-container{{if not $user.HideOnline}}{{if $user.Online}} online{{else}} offline{{end}}{{end}}
+                                                {{if $user.Role.Image}} official-user"><img src="{{$user.Role.Image}}" class="official-tag">{{else}}">{{end}}
+                                                    <a href="/users/{{$user.Username}}">
+                                                        <img src="{{$user.Avatar}}" alt="{{$user.Nickname}}" class="icon">
+                                                    </a>
+                                                </div>
+                                                <a href="/users/{{$user.Username}}" class="nick-name"{{if $user.Color}} style="color:{{$user.Color}}"{{end}}>{{$user.Nickname}}</a>
+                                                <p class="id-name">{{$user.Username}}</p>
+                                            </div>
+                                            <form method="post" data-action="/users/{{$user.Username}}/unblock">
+                                                <p class="window-body-content">Unblock this user?</p>
+                                                <div class="form-buttons">
+                                                    <input type="button" class="olv-modal-close-button gray-button" value="No">
+                                                    <input type="submit" value="Yes" class="post-button black-button">
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {{end}}
+                    {{else}}
+                        {{if eq .Offset 25}}
+                            <div class="no-content">
+                                <p>You haven't blocked any users.</p>
+                            </div>
+                        {{end}}
+                    {{end}}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}

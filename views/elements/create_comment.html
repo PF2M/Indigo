@@ -1,0 +1,102 @@
+<li id="{{.Comment.ID}}" data-href{{if and .IsSpoiler (not .ByMii)}}-hidden{{end}}="/comments/{{.Comment.ID}}" class="post {{if .ByMe}}my{{else}}other{{end}} trigger{{if and .IsSpoiler (not .ByMii)}} hidden{{end}}">
+    <a href="/users/{{.Comment.CommenterUsername}}" username="{{.Comment.CommenterUsername}}" class="icon-container{{if not .Comment.CommenterHideOnline}} online{{end}}{{if .Comment.CommenterRoleImage}} official-user"><img src="{{.Comment.CommenterRoleImage}}" class="official-tag">{{else}}">{{end}}<img src="{{.Comment.CommenterIcon}}" class="icon"></a>
+    <div class="body">
+        <div class="header">
+            <p class="user-name"><a href="/users/{{.Comment.CommenterUsername}}"{{if .Comment.CommenterColor}} style="color:{{.Comment.CommenterColor}}"{{end}}>{{.Comment.CommenterNickname}}</a></p>
+            <p class="timestamp-container">
+                <a class="timestamp" href="/comments/{{.Comment.ID}}">
+					<span class="update" time="{{.Comment.CreatedAtUnix}}000">{{.Comment.CreatedAt}}</span>
+					{{if .Comment.EditedAt}}
+						(Edited <span class="update" time="{{.Comment.EditedAtUnix}}000">{{.Comment.EditedAt}}</span>)
+					{{end}}
+				</a>
+                <span class="spoiler-status{{if .Comment.IsSpoiler}} spoiler{{end}}"> · Spoilers</span>
+            </p>
+        </div>
+        {{if eq .Comment.PostType 1}}
+            <div class="reply-content-memo">
+                <img class="reply-memo" src="{{.Comment.BodyText}}">
+            </div>
+        {{else}}
+            <div class="reply-content-text">{{.Comment.Body}}</div>
+        {{end}}
+        {{if .Comment.Image}}
+			{{if eq .Comment.AttachmentType 1}}
+				<div class="screenshot-container">
+					<audio controls preload="none" src="{{.Comment.Image}}"></audio>
+				</div>
+			{{else if eq .Comment.AttachmentType 2}}
+				<div class="screenshot-container video">
+					<video controls preload="none" src="{{.Comment.Image}}"></video>
+				</div>
+			{{else}}
+				<div class="screenshot-container still-image">
+					<img src="{{.Comment.Image}}">
+				</div>
+			{{end}}
+		{{end}}
+		{{if .Comment.URL}}
+            {{if eq .Comment.URLType 1}}
+                <div class="screenshot-container video">
+                    <iframe src="https://www.youtube.com/embed/{{.Comment.URL}}" width="490" height="276" frameborder="0" allowfullscreen="true"></iframe>
+                </div>
+            {{else if eq .Comment.URLType 2}}
+                <div class="screenshot-container video">
+                    <iframe src="https://open.spotify.com/embed/track/{{.Comment.URL}}" width="490" height="276" frameborder="0" allow="encrypted-media"></iframe>
+                </div>
+            {{else if eq .Comment.URLType 3}}
+                <div class="screenshot-container video audio">
+                    <iframe class="audio" src="https://w.soundcloud.com/player/?url={{.Comment.URL}}&auto_play=false&show_artwork=true&color=8000ff" frameborder="0"></iframe>
+                </div>
+            {{else}}
+                <p class="url-link">
+                    <a class="link-confirm" href="{{.Comment.URL}}" target="_blank">{{.Comment.URL}}</a>
+                </p>
+            {{end}}
+		{{end}}
+		{{if and .Comment.IsSpoiler (not .Comment.ByMii)}}
+            <div class="hidden-content">
+            <p>This comment contains spoilers.</p>
+            <button type="button" class="hidden-content-button">View Post</button>
+            </div>
+        {{end}}
+        <div class="reply-meta">
+            <button type="button" {{if not .CanYeah}} disabled{{end}} class="symbol submit yeah-button
+            {{if not .CanYeah}} disabled{{end}}
+            " data-is-in-reply-list="1" data-feeling="{{.Comment.Feeling}}" data-action="/comments/{{.Comment.ID}}/yeah" data-url-id="{{.Comment.ID}}"><span class="yeah-button-text">
+                {{if .Comment.Yeahed}}
+					{{if eq .Comment.Feeling 6}}
+						Unepic
+					{{else if eq .Comment.Feeling 7}}
+						Unnyeah
+					{{else if eq .Comment.Feeling 8}}
+						Unyes
+					{{else if eq .Comment.Feeling 9}}
+						olv.portal.miitoo.delete
+					{{else}}
+						Unyeah
+					{{end}}
+				{{else}}
+					{{if eq .Comment.Feeling 2}}
+						Yeah♥
+					{{else if eq .Comment.Feeling 3}}
+						Yeah!?
+					{{else if or (eq .Comment.Feeling 4) (eq .Comment.Feeling 5)}}
+						Yeah...
+					{{else if eq .Comment.Feeling 6}}
+						Epic!
+					{{else if eq .Comment.Feeling 7}}
+						Nyeah~♥
+					{{else if eq .Comment.Feeling 8}}
+						Yes!
+					{{else if eq .Comment.Feeling 9}}
+						olv.portal.miitoo.
+					{{else}}
+						Yeah!
+					{{end}}
+				{{end}}
+            </span></button>
+            <div class="yeah symbol"><span class="symbol-label">Yeahs</span><span class="yeah-count">0</span></div>
+        </div>
+    </div>
+</li>

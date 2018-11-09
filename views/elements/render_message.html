@@ -1,0 +1,56 @@
+<div class="post scroll {{if .ByMe}}my{{else}}other{{end}}" id="{{.ID}}">
+	<a href="/users/{{.ByUsername}}" username="{{.ByUsername}}" class="icon-container {{if not .ByHideOnline}}{{if .ByOnline}}online{{else}}offline{{end}}{{end}}{{if .ByRoleImage}} official-user"><img src="{{.ByRoleImage}}" class="official-tag">{{else}}">{{end}}
+		<img src="{{.ByAvatar}}" class="icon">
+	</a>
+	<p class="timestamp-container">
+		<span class="timestamp{{if .DateUnix}} update" time="{{.DateUnix}}000{{end}}">{{.Date}}</span>
+		{{if .ByMe}}
+			<button type="button" class="symbol button edit-button rm-post-button" data-action="/messages/{{.ID}}/delete">
+				<span class="symbol-label">Delete</span>
+			</button>
+		{{end}}
+	</p>
+	<div class="post-body">
+		{{if eq .PostType 1}}
+			<div class="post-content-memo">
+				<img class="post-memo" src="{{.BodyText}}">
+			</div>
+		{{else}}
+			<div class="post-content-text">{{.Body}}</div>
+		{{end}}
+		{{if .Image}}
+			{{if eq .AttachmentType 1}}
+				<div class="screenshot-container">
+					<audio controls preload="none" src="{{.Image}}"></audio>
+				</div>
+			{{else if eq .AttachmentType 2}}
+				<div class="screenshot-container still-image">
+					<video controls preload="none" src="{{.Image}}"></video>
+				</div>
+			{{else}}
+				<div class="screenshot-container still-image">
+					<img src="{{.Image}}">
+				</div>
+			{{end}}
+		{{end}}
+		{{if .URL}}
+            {{if eq .URLType 1}}
+                <div class="screenshot-container video">
+                    <iframe src="https://www.youtube.com/embed/{{.URL}}" width="490" height="276" frameborder="0" allowfullscreen="true"></iframe>
+                </div>
+            {{else if eq .URLType 2}}
+                <div class="screenshot-container video">
+                    <iframe src="https://open.spotify.com/embed/track/{{.URL}}" width="490" height="276" frameborder="0" allow="encrypted-media"></iframe>
+                </div>
+            {{else if eq .URLType 3}}
+                <div class="screenshot-container video audio">
+                    <iframe class="audio" src="https://w.soundcloud.com/player/?url={{.URL}}&auto_play=false&show_artwork=true&color=8000ff" frameborder="0"></iframe>
+                </div>
+            {{else}}
+                <p class="url-link">
+                    <a class="link-confirm" href="{{.URL}}" target="_blank">{{.URL}}</a>
+                </p>
+            {{end}}
+        {{end}}
+	</div>
+</div>

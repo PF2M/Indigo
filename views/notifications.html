@@ -1,0 +1,73 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body">
+	{{template "general_sidebar.html" .}}
+	<div class="main-column messages">
+		<div class="post-list-outline">
+			<h2 class="label">My notifications</h2>
+			<div id="notification-tab-container" class="tab-container">
+				<div class="tab2">
+					<a class="tab-icon-my-news selected" href="/notifications">
+						<span class="symbol nf"></span>
+						<span>Updates</span>
+					</a>
+					<a class="tab-icon-my-news{{if .Notify}} notify{{end}}" href="/notifications/friend_requests">
+						<span class="symbol fr"></span>
+						<span>Friend Requests</span>
+					</a>
+				</div>
+			</div>
+			<div class="list news-list">
+				{{if .Notifs}}
+					{{$username := .CurrentUser.Username}}
+					{{range $notif := .Notifs}}
+						<div class="news-list-content{{if not $notif.Read}} notify{{end}} trigger" tabindex="0" id="{{$notif.ID}}" data-href="
+						{{if or (or (eq $notif.Type 0) (eq $notif.Type 2)) (or (eq $notif.Type 3) (eq $notif.Type 7))}}
+							/posts/{{$notif.Post.Int64}}
+						{{else if eq $notif.Type 1}}
+							/comments/{{$notif.Post.Int64}}
+						{{else if eq $notif.Type 7}}
+							/news/fuck
+						{{else}}
+							/users/{{$username}}/followers
+						{{end}}
+						">
+							<a href="/users/{{$notif.ByUsername}}" username="{{$notif.ByUsername}}" class="icon-container {{if not $notif.ByHideOnline}}{{if $notif.ByOnline}}online{{else}}offline{{end}}{{end}}
+								{{if $notif.ByRoleImage}} official-user"><img src="{{$notif.ByRoleImage}}" class="official-tag">{{else}}">{{end}}
+								<img src="{{$notif.ByAvatar}}" class="icon">
+							</a>
+							<div class="body">
+								<!-- i'm sorry mom -->
+								{{if eq $notif.Type 4}}Followed by {{end}}<a href="/users/{{$notif.ByUsername}}" class="nick-name"{{if $notif.ByColor}} style="color:{{$notif.ByColor}}"{{end}}>{{$notif.ByNickname}}</a>{{if $notif.MergedCount}}{{if eq $notif.MergedCount 1}} and <a href="/users/{{index $notif.MergedUsername 0}}" class="nick-name"{{if index $notif.MergedColor 0}} style="color:{{index $notif.MergedColor 0}}"{{end}}>{{index $notif.MergedNickname 0}}</a>{{else if eq $notif.MergedCount 2}}, <a href="/users/{{index $notif.MergedUsername 0}}" class="nick-name"{{if index $notif.MergedColor 0}} style="color:{{index $notif.MergedColor 0}}"{{end}}>{{index $notif.MergedNickname 0}}</a>, and <a href="/users/{{index $notif.MergedUsername 1}}" class="nick-name"{{if index $notif.MergedColor 1}} style="color:{{index $notif.MergedColor 1}}"{{end}}>{{index $notif.MergedNickname 1}}</a>{{else if eq $notif.MergedCount 3}}, <a href="/users/{{index $notif.MergedUsername 0}}" class="nick-name"{{if (index $notif.MergedColor 0)}} style="color:{{index $notif.MergedColor 0}}"{{end}}>{{index $notif.MergedNickname 0}}</a>, <a href="/users/{{index $notif.MergedUsername 1}}" class="nick-name"{{if index $notif.MergedColor 1}} style="color:{{index $notif.MergedColor 1}}"{{end}}>{{index $notif.MergedNickname 1}}</a>, and <a href="/users/{{index $notif.MergedUsername 2}}" class="nick-name"{{if index $notif.MergedColor 2}} style="color:{{index $notif.MergedColor 2}}"{{end}}>{{index $notif.MergedNickname 2}}</a>{{else if eq $notif.MergedCount 4}}, <a href="/users/{{index $notif.MergedUsername 0}}" class="nick-name"{{if index $notif.MergedColor 0}} style="color:{{index $notif.MergedColor 0}}"{{end}}>{{index $notif.MergedNickname 0}}</a>, <a href="/users/{{index $notif.MergedUsername 1}}" class="nick-name"{{if index $notif.MergedColor 1}} style="color:{{index $notif.MergedColor 1}}"{{end}}>{{index $notif.MergedNickname 1}}</a>, <a href="/users/{{index $notif.MergedUsername 2}}" class="nick-name"{{if index $notif.MergedColor 2}} style="color:{{index $notif.MergedColor 2}}"{{end}}>{{index $notif.MergedNickname 2}}</a>, and 1 other{{else}}, <a href="/users/{{index $notif.MergedUsername 0}}" class="nick-name"{{if index $notif.MergedColor 0}} style="color:{{index $notif.MergedColor 0}}"{{end}}>{{index $notif.MergedNickname 0}}</a>, <a href="/users/{{index $notif.MergedUsername 1}}" class="nick-name"{{if index $notif.MergedColor 1}} style="color:{{index $notif.MergedColor 1}}"{{end}}>{{index $notif.MergedNickname 1}}</a>, <a href="/users/{{index $notif.MergedUsername 2}}" class="nick-name"{{if index $notif.MergedColor 2}} style="color:{{index $notif.MergedColor 2}}"{{end}}>{{index $notif.MergedNickname 2}}</a>, and {{$notif.MergedOthers}} others{{end}}{{end}}
+								{{if eq $notif.Type 0}}
+									gave <a href="/posts/{{$notif.Post.Int64}}" class="link">your post&nbsp;({{$notif.PostText}})</a> a Yeah.
+								{{else if eq $notif.Type 1}}
+									gave <a href="/comments/{{$notif.Post.Int64}}" class="link">your comment&nbsp;({{$notif.PostText}})</a> a Yeah.
+								{{else if eq $notif.Type 2}}
+									commented on <a href="/posts/{{$notif.Post.Int64}}" class="link">your post&nbsp;({{$notif.PostText}})</a>.
+								{{else if eq $notif.Type 3}}
+									commented on <a href="/posts/{{$notif.Post.Int64}}" class="link">{{$notif.ByNickname}}'s post&nbsp;({{$notif.PostText}})</a>.
+								{{else if eq $notif.Type 7}}
+									reposted <a href="/posts/{{$notif.Post.Int64}}" class="link">your post&nbsp;({{$notif.PostText}})</a>.
+								{{else if eq $notif.Type 8}}
+									<br>You have received a notification from the Indigo Administration.
+								{{end}}
+								<span class="timestamp update" time="{{$notif.DateUnix}}000">{{$notif.Date}}</span>
+							</div>
+						</div>
+					{{end}}
+				{{else}}
+					<div class="no-content">
+						<p>No notifications.</p>
+					</div>
+				{{end}}
+			</div>
+		</div>
+	</div>
+</div>
+{{if .Pjax}}
+	{{template "footer.html"}}
+{{end}}

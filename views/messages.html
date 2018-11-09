@@ -1,0 +1,47 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body">
+	{{template "general_sidebar.html" .}}
+	<div class="main-column messages">
+		<div class="post-list-outline">
+			<h2 class="label">Messages<a href="/conversations/create"><button class="button msg-update">Create Group</button></a></h2>
+			<div class="list">
+				<ul class="list-content-with-icon-and-text arrow-list"{{if .Conversations}} data-next-page-url="/messages?offset={{.Offset}}"{{end}}>
+					{{if .Conversations}}
+                        {{$user_id := .CurrentUser.ID}}
+                        {{range $conversation := .Conversations}}
+							<li class="trigger{{if (and (not $conversation.Read) (not (eq $conversation.CreatedBy $user_id)))}} notify{{end}}" data-href="/{{if not (eq $conversation.Target 0)}}messages{{else}}conversations{{end}}/{{$conversation.Username}}">
+								<a href="/{{if eq $conversation.Target 0}}conversations{{else}}users{{end}}/{{$conversation.Username}}" username="{{$conversation.Username}}" class="icon-container {{if not $conversation.HideOnline}}{{if $conversation.Online}}online{{else}}offline{{end}}{{end}}
+								{{if $conversation.RoleImage}} official-user"><img src="{{$conversation.RoleImage}}" class="official-tag">{{else}}">{{end}}
+									<img src="{{$conversation.Icon}}" class="icon">
+								</a>
+								<div class="body">
+									<p class="title">
+										<span class="nick-name">
+											<a href="/{{if eq $conversation.Target 0}}conversations{{else}}users{{end}}/{{$conversation.Username}}"{{if $conversation.Color}} style="color:{{$conversation.Color}}"{{end}}>{{$conversation.Nickname}}</a>
+										</span>
+										{{if not (eq $conversation.Target 0)}}<span class="id-name">{{$conversation.Username}}</span>{{end}}
+									</p>
+									{{if $conversation.Date}}<span class="timestamp update" time="{{$conversation.DateUnix}}000">{{$conversation.Date}}</span>{{end}}
+									<p class="text {{if eq $conversation.CreatedBy $user_id}}my{{else}}other{{end}}{{if and ($conversation.BodyText) (eq $conversation.PostType 0)}}">{{$conversation.BodyText}}{{else if eq $conversation.PostType 1}} type-memo">(handwritten){{else if $conversation.Image}} type-memo">(attachment){{else}} placeholder">You haven't exchanged messages with this {{if eq $conversation.Target 0}}group{{else}}user{{end}} yet.{{end}}</p>
+								</div>
+							</li>
+						{{end}}
+					{{else}}
+						{{if eq .Offset 20}}
+							<div class="no-content">
+        	                    <p>No messages.</p>
+                	    	</div>
+						{{end}}
+					{{end}}
+				</ul>
+			</div>
+		</div>
+	</div>
+</div>
+{{if .Pjax}}
+	{{template "footer.html"}}
+{{end}}

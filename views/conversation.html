@@ -1,0 +1,96 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body">
+	{{template "general_sidebar.html" .}}
+	<div class="main-column{{if .IsGroupChat}} conversation{{end}}">
+		{{if .IsGroupChat}}<a href="/conversations/{{.ConversationID}}/edit"><button class="button msg-update">Edit Group</button></a>{{end}}
+		<form class="search{{if not .Query}} folded{{end}}">
+			<input type="text" name="q"{{if .Query}} value="{{.Query}}"{{end}} placeholder="Search Messages" maxlength="255"{{if not .Query}} required{{end}}>
+			<input type="submit" value="q" title="Search">
+		</form>
+		<div class="post-list-outline">
+			<h2 class="label">{{.Title}}</h2>
+			<form id="post-form" method="post" action="/messages" class="folded" data-post-subtype="default">
+				<input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+				<input type="hidden" name="conversation" value="{{.ConversationID}}">
+				<div class="feeling-selector js-feeling-selector"><label class="symbol feeling-button feeling-button-normal checked"><input type="radio" name="feeling_id" value="0" checked><span class="symbol-label">normal</span></label><label class="symbol feeling-button feeling-button-happy"><input type="radio" name="feeling_id" value="1"><span class="symbol-label">happy</span></label><label class="symbol feeling-button feeling-button-like"><input type="radio" name="feeling_id" value="2"><span class="symbol-label">like</span></label><label class="symbol feeling-button feeling-button-surprised"><input type="radio" name="feeling_id" value="3"><span class="symbol-label">surprised</span></label><label class="symbol feeling-button feeling-button-frustrated"><input type="radio" name="feeling_id" value="4"><span class="symbol-label">frustrated</span></label><label class="symbol feeling-button feeling-button-puzzled"><input type="radio" name="feeling_id" value="5"><span class="symbol-label">puzzled</span></label></div>
+				<div class="textarea-with-menu active-text">
+                        <menu class="textarea-menu">
+                            <li><label class="textarea-menu-text"><input type="radio" name="post_type" value="0"></label></li>
+							<li><label class="textarea-menu-memo"><input type="radio" name="post_type" value="1"></label></li>
+							<span class="character-count">2000</span>
+                        </menu>
+                        <div class="textarea-container">
+                            <textarea name="body" class="textarea-text textarea" maxlength="2000" placeholder="Write a message here." data-open-folded-form data-required></textarea>
+                        </div>
+						<div class="textarea-memo none">
+							<div id="memo-drawboard-page" class="none">
+								<div class="window-body">
+									<div class="memo-buttons">
+										<button type="button" class="artwork-clear"></button>
+										<button type="button" class="artwork-undo"></button>
+										<button type="button" class="artwork-pencil small selected"></button>
+										<button type="button" class="artwork-eraser small"></button>
+										<button type="button" class="artwork-fill"></button>
+										<input type="text" class="artwork-color">
+										<button type="button" class="artwork-zoom"></button>
+									</div>
+									<div class="memo-canvas">
+										<canvas id="artwork-canvas" zoom="2"></canvas>
+										<canvas id="artwork-canvas-undo"></canvas>
+										<canvas id="artwork-canvas-redo"></canvas>
+										<input type="hidden" name="painting">
+									</div>
+									<div class="form-buttons">
+										<input class="olv-modal-close-button black-button memo-finish-btn" type="button" value="Save">
+										<button type="button" class="artwork-lock none"></button>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+                    <label class="file-button-container">
+						<span class="input-label">Attachment
+							<span>
+								Images, audio and videos are allowed.
+								{{if .MaxUploadSize}}Maximum upload size: {{.MaxUploadSize}}{{end}}
+							</span>
+						</span>
+						<span class="button file-upload-button">Upload</span>
+						<input accept="image/*, audio/*, video/*" type="file" class="file-button none">
+						<input type="hidden" name="image">
+						<input type="hidden" name="attachment_type">
+						<div class="screenshot-container still-image preview-container" style="display:none">
+							<img class="preview-image none">
+							<video class="preview-video none" controls></video>
+							<audio class="preview-audio none" controls></audio>
+						</div>
+						<script src="/assets/js/upload.js"></script>
+					</label>
+                    <div class="form-buttons">
+                        <input type="submit" class="black-button post-button disabled" value="Send" data-post-content-type="text" data-post-with-screenshot="nodata" disabled>
+                    </div>
+                </form>
+			<div class="list messages"{{if .Messages}} data-next-page-url="/{{if .IsGroupChat}}conversations/{{.ConversationID}}{{else}}messages/{{.User.Username}}{{end}}?{{if .Query}}q={{.Query}}{{end}}&offset={{.Offset}}"{{end}}>
+				{{if .Messages}}
+					{{$username := .CurrentUser.Username}}
+					{{range $message := .Messages}}
+						{{template "render_message.html" $message}}
+					{{end}}
+				{{else}}
+					{{if eq .Offset 20}}
+						<div class="no-content">
+							<p>No messages.</p>
+						</div>
+					{{end}}
+				{{end}}
+			</div>
+		</div>
+	</div>
+</div>
+{{if .Pjax}}
+	{{template "footer.html"}}
+{{end}}

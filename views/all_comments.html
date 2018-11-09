@@ -1,0 +1,8 @@
+<ul class="list reply-list test-reply-list">
+    {{range $comment := .PinnedComments}}
+        {{template "render_comment.html" $comment}}
+    {{end}}
+    {{range $comment := .Comments}}
+        {{template "render_comment.html" $comment}}
+    {{end}}
+</ul>

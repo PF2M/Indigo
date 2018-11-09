@@ -1,0 +1,42 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+    <meta property="og:profile:username" content="{{.User.Username}}">
+    <meta property="og:description" content="{{if .Sidebar.Profile.Comment}}{{.Sidebar.Profile.Comment}}{{else}}View {{.User.Nickname}}'s {{.Sidebar.ProfileOnPage}} on Indigo.{{end}}">
+    {{if .Sidebar.Profile.FavoritePostImage}}<meta property="og:image" content="{{.Sidebar.Profile.FavoritePostImage}}">{{end}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body" class="profile-top">
+    {{template "profile_sidebar.html" .Sidebar}}
+    {{$user := .User}}
+    <div class="main-column">
+        <form class="search{{if not .Query}} folded{{end}}">
+            <input type="text" name="q"{{if .Query}} value="{{.Query}}"{{end}} placeholder="Search {{if eq .Sidebar.ProfileOnPage "comments"}}Comments{{else if eq .Sidebar.ProfileOnPage "yeahs"}}Yeahs{{else}}Posts{{end}}" maxlength="255"{{if not .Query}} required{{end}}>
+            <input type="submit" value="q" title="Search">
+        </form>
+        <div class="post-list-outline">
+	    <h2 class="label">{{.Title}}</h2>
+            <div id="postsz">
+                <div class="body-content" id="community-post-list">
+                    <div class="list post-list js-post-list" data-next-page-url="{{if .Posts}}?{{if .Query}}q={{.Query}}{{end}}&offset={{.Offset}}{{end}}">
+                        {{if .Posts}}
+                            {{$user_id := .CurrentUser.ID}}
+                            {{range $post := .Posts}}
+				                {{template "render_post.html" $post}}
+                            {{end}}
+                        {{else}}
+                            {{if eq .Offset 25}}
+                                <div class="no-content">
+                                    <p>No posts.</p>
+                                </div>
+                            {{end}}
+                        {{end}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}

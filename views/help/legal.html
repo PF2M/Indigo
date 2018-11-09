@@ -1,0 +1,21 @@
+{{if .Pjax}}
+	{{template "header.html" .}}
+	<meta property="og:description" content="Here you can find legal information on Indigo and learn where to contact the team if you have any legal inquiries.">
+{{else}}
+	<title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body" class="profile-top">
+    {{template "general_sidebar.html" .}}
+    <div class="main-column" id="help">
+		<div class="post-list-outline">
+			<h2 class="label">Legal Information</h2>
+			<div id="guide" class="help-content">
+				<p>This project is not, in any way, associated with Nintendo Co, Ltd. or Hatena Co, Ltd. Nintendo and Hatena have no involvement with this service, neither company maintains, endorses, sponsors or contributes to this.</p>
+				<p>If anything found on this site infringes on your rights, feel free to <a href="/help/contact">contact us here</a> or email us at <a href="mailto:&#99;%6f%6e&#116;a%63t@%69%6e%64i%67&#111;&#46;%67%72%6fu%70">co&#110;&#116;&#97;&#99;t@in&#100;&#105;g&#111;.&#103;r&#111;&#117;p.</a></p>
+			</div>
+		</div>
+    </div>
+</div>
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}

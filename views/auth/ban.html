@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Indigo</title>
+	<meta http-equiv="content-style-type" content="text/css">
+	<meta http-equiv="content-script-type" content="text/javascript">
+	<meta name="format-detection" content="telephone=no">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<meta name="apple-mobile-web-app-title" content="Indigo">
+	<meta name="description" content="lmao idiot you got killed now you have to go use yiffverse or something">
+	<meta property="og:locale" content="en_US">
+	<meta property="og:title" content="{{.Title}}">
+	<meta property="og:type" content="article">
+	<meta property="og:url" content="https://indigo.group/">
+	<meta property="og:image" content="/assets/img/favicon.png">
+	<meta property="og:description" content="lmao idiot you got killed now you have to go use yiffverse or something">
+	<meta property="og:site_name" content="Indigo">
+	<meta property="article:published_time" content="None">
+	<link rel="shortcut icon" type="image/png" href="/assets/img/favicon.png">
+	<link rel="stylesheet" type="text/css" href="/assets/css/offdevice.css">
+	<link id="darkness" {{if .CurrentUser.LightMode}}disabled{{end}} rel="stylesheet" type="text/css" href="/assets/css/dark.css">
+</head>
+<body class="simple-wrapper simple-wrapper-content">
+	<div id="wrapper" style="margin-top:0">
+		<div id="main-body">
+			<div class="warning-content warning-content-restricted track-error" data-track-error="restricted">
+				<div>
+					<img src="/assets/img/restricted.png">
+					<p>Your ability to use Indigo has been restricted due to violation(s) of the Indigo rules.</p>
+					<p>Ban expiration date: <strong>{{.Length}}</strong></p>
+				</div>
+			</div>
+		</div>
+	</div>
+</body>

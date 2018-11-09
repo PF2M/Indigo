@@ -1,0 +1,144 @@
+<div id="{{.ID}}"{{if not .IsRMByAdmin}} data-href{{if and .IsSpoiler (not .ByMe)}}-hidden{{end}}="/posts/{{.ID}}"{{end}} class="post{{if not .IsRMByAdmin}} trigger{{end}}{{if .Image}} with-image{{end}}{{if and (or .IsSpoiler .IsRMByAdmin) (not .ByMe)}} hidden{{end}}"{{if not .IsRMByAdmin}} tabindex="0"{{end}}>
+    <p class="community-container">
+        {{if .MigrationImage}}
+            <a{{if .MigrationURL}} href="{{.MigrationURL}}{{.MigratedID}}"{{end}} class="post-migration-label">
+                <img src="{{.MigrationImage}}">
+            </a>
+        {{end}}
+        <a{{if not .CommunityRM}} href="/communities/{{.CommunityID}}"{{end}}>
+            <img src="{{.CommunityIcon}}" class="community-icon">
+            {{.CommunityName}}
+        </a>
+    </p>
+    <div class="body">
+        <div class="post-content">
+            <a href="/users/{{.PosterUsername}}" username="{{.PosterUsername}}" class="icon-container
+            {{if not .PosterHideOnline}}
+                {{if .PosterOnline}}
+                    online
+                {{else}}
+                    offline
+                {{end}}
+            {{end}}
+            {{if .PosterRoleImage}} official-user"><img src="{{.PosterRoleImage}}" class="official-tag">{{else}}">{{end}}
+                <img src="{{.PosterIcon}}" class="icon">
+            </a>
+            <p class="user-name"><a href="/users/{{.PosterUsername}}"{{if .PosterColor}} style="color:{{.PosterColor}}"{{end}}>{{.PosterNickname}}</a></p>
+            <p class="timestamp-container">
+                {{if .Pinned}}
+                    <span class="spoiler">Pinned</span> ·
+                {{end}}
+                {{if .Privacy}}
+                    <span class="spoiler">Private</span> ·
+                {{end}}
+                {{if .IsSpoiler}}
+                    <span class="spoiler">Spoilers</span> ·
+                {{end}}
+                <a class="timestamp"{{if not .IsRMByAdmin}} href="/posts/{{.ID}}"{{end}}>
+                    <span class="update" time="{{.CreatedAtUnix}}000">{{.CreatedAt}}</span>
+                    {{if .EditedAt}}
+                        (Edited <span class="update" time="{{.EditedAtUnix}}000">{{.EditedAt}}</span>)
+                    {{end}}
+                </a>
+            </p>
+            {{if .IsRMByAdmin}}
+                <p class="deleted-message">
+                    Deleted by administrator.<br>
+                    Post ID: #{{.ID}}
+                </p>
+            {{end}}
+            {{if or (not .IsRMByAdmin) .ByMe}}
+                {{if .Image}}
+                    {{if eq .AttachmentType 1}}
+                        <a class="screenshot-container">
+                            <audio controls preload="none" src="{{.Image}}"></audio>
+                        </a>
+                    {{else if eq .AttachmentType 2}}
+                        <div class="screenshot-container still-image">
+                            <video controls preload="none" src="{{.Image}}"></video>
+                        </div>
+                    {{else}}
+                        <div class="screenshot-container still-image">
+                            <img src="{{.Image}}">
+                        </div>
+                    {{end}}
+                {{end}}
+                {{if .URL}}
+                    {{if eq .URLType 1}}
+                        <a href="/posts/{{.ID}}" class="screenshot-container video">
+                            <img height="48" src="https://i.ytimg.com/vi/{{.URL}}/default.jpg">
+                        </a>
+                    {{else}}
+                        <p class="url-link">
+                            <a class="link-confirm" href="{{if eq .URLType 2}}https://open.spotify.com/track/{{.URL}}{{else}}{{.URL}}{{end}}" target="_blank">{{if eq .URLType 2}}https://open.spotify.com/track/{{end}}{{.URL}}</a>
+                        </p>
+                    {{end}}
+                {{end}}
+                {{if eq .PostType 1}}
+                    <div class="post-content-memo">
+                        <img class="post-memo" src="{{.BodyText}}">
+                    </div>
+                {{else}}
+                    <div class="post-content-text">{{.Body}}</div>
+                {{end}}
+                {{if and .IsSpoiler (not .ByMe)}}
+                    <div class="hidden-content">
+                        <p>This post contains spoilers.
+                            <button type="button" class="hidden-content-button">View Post</button>
+                        </p>
+                    </div>
+                {{end}}
+                {{if eq .PostType 2}}
+                    {{template "poll.html" .Poll}}
+                {{end}}
+                {{if .RepostID}}
+                    {{template "render_post.html" .Repost}}
+                {{end}}
+                {{if not .IsRMByAdmin}}
+                    <div class="post-meta">
+                        <button type="button" {{if not .CanYeah}} disabled{{end}} class="symbol submit yeah-button
+                        {{if .Yeahed}} yeah-added{{end}}
+                        {{if not .CanYeah}} disabled{{end}}
+                        " data-feeling="{{.Feeling}}" data-action="/posts/{{.ID}}/yeah" data-community-id data-url-id="{{.ID}}">
+                            <span class="yeah-button-text">
+                                {{if .Yeahed}}
+                                    {{if eq .Feeling 6}}
+                                        Unepic
+                                    {{else if eq .Feeling 7}}
+                                        Unnyeah
+                                    {{else if eq .Feeling 8}}
+                                        Unyes
+                                    {{else if eq .Feeling 9}}
+                                        olv.portal.miitoo.delete
+                                    {{else}}
+                                        Unyeah
+                                    {{end}}
+                                {{else}}
+                                    {{if eq .Feeling 2}}
+                                        Yeah♥
+                                    {{else if eq .Feeling 3}}
+                                        Yeah!?
+                                    {{else if or (eq .Feeling 4) (eq .Feeling 5)}}
+                                        Yeah...
+                                    {{else if eq .Feeling 6}}
+                                        Epic!
+                                    {{else if eq .Feeling 7}}
+                                        Nyeah~♥
+                                    {{else if eq .Feeling 8}}
+                                        Yes!
+                                    {{else if eq .Feeling 9}}
+                                        olv.portal.miitoo.
+                                    {{else}}
+                                        Yeah!
+                                    {{end}}
+                                {{end}}
+                            </span>
+                        </button>
+                        <div class="yeah symbol"><span class="symbol-label">Yeahs</span><span class="yeah-count">{{.YeahCount}}</span></div>
+                        <div class="reply symbol"><span class="symbol-label">Comments</span><span class="reply-count">{{.CommentCount}}</span></div>
+                    </div>
+                {{end}}
+            {{end}}
+        </div>
+    </div>
+</div>

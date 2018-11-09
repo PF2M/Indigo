@@ -1,0 +1,160 @@
+{{if eq .Type 4}}
+    <div class="post-list-outline no-content repost-error">
+        <a href="/posts/{{.ID}}">There are more posts in this thread. Click to view...</a>
+    </div>
+{{else if and (eq .Type 3) (not .CommunityName)}}
+    <div class="post-list-outline no-content repost-error">
+        <p>The post could not be found.</p>
+    </div>
+{{else if and (eq .Type 3) .IsRMByAdmin}}
+    <div class="no-content track-error" data-track-error="deleted">
+        <div>
+            <p class="deleted-message">
+                Deleted by administrator.<br>
+                Post ID: #{{.ID}}
+            </p>
+        </div>
+    </div>
+{{else}}
+    <div id="{{.ID}}"{{if not (eq .Type 3)}}{{if not .IsRMByAdmin}} data-href{{if and .IsSpoiler (not .ByMe)}}-hidden{{end}}="/{{if gt .CommentCount -1}}posts{{else}}comments{{end}}/{{.ID}}"{{end}}{{end}} class="post post-subtype-default{{if not .IsRMByAdmin}} trigger{{end}}{{if .Pinned}} pinned{{end}}{{if and (or .IsSpoiler .IsRMByAdmin) (not .ByMe)}} hidden{{end}}{{if gt .Type 1}} post-list-outline{{end}}{{if eq .Type 3}} repost{{if .Image}} with-image{{end}}{{end}}"{{if not .IsRMByAdmin}} tabindex="0"{{end}}>
+        {{if not (eq .Type 0)}}
+            <p class="community-container">
+                {{if .MigrationImage}}
+                    <a{{if .MigrationURL}} href="{{.MigrationURL}}{{.MigratedID}}"{{end}} class="post-migration-label{{if gt .Type 2}} from-repost{{end}}">
+                        <img src="{{.MigrationImage}}">
+                    </a>
+                {{end}}
+                <a{{if not .CommunityRM}} href="/{{if gt .CommentCount -1}}communities{{else}}posts{{end}}/{{.CommunityID}}"{{end}}>
+                    <img src="{{.CommunityIcon}}" class="community-icon">
+                    {{.CommunityName}}
+                </a>
+            </p>
+        {{end}}
+        <a href="/users/{{.PosterUsername}}" username="{{.PosterUsername}}" class="icon-container {{if not .PosterHideOnline}}{{if .PosterOnline}}online{{else}}offline{{end}}{{end}}
+        {{if .PosterRoleImage}} official-user"><img src="{{.PosterRoleImage}}" class="official-tag">{{else}}">{{end}}
+            <img src="{{.PosterIcon}}" class="icon">
+        </a>
+        <p class="user-name"><a href="/users/{{.PosterUsername}}"{{if .PosterColor}} style="color:{{.PosterColor}}"{{end}}>{{.PosterNickname}}</a></p>
+        <p class="timestamp-container">
+            <span class="spoiler-status{{if .Pinned}} spoiler{{end}}">Pinned ·</span>
+            {{if .Privacy}}<span class="spoiler-status spoiler">Private ·</span>{{end}}
+            <span class="spoiler-status{{if .IsSpoiler}} spoiler{{end}}">Spoilers ·</span>
+            <a class="timestamp"{{if not .IsRMByAdmin}} href="/{{if gt .CommentCount -1}}posts{{else}}comments{{end}}/{{.ID}}"{{end}}>
+                <span class="update" time="{{.CreatedAtUnix}}000">{{.CreatedAt}}</span>
+                {{if .EditedAt}}
+                    (Edited <span class="update" time="{{.EditedAtUnix}}000">{{.EditedAt}}</span>)
+                {{end}}
+            </a>
+        </p>
+        <div class="body post-content">
+            {{if .IsRMByAdmin}}
+                <p class="deleted-message">
+                    Deleted by administrator.<br>
+                    {{if eq .CommentCount -1}}Commen{{else}}Pos{{end}}t ID: #{{.ID}}
+                </p>
+            {{end}}
+            {{if or (not .IsRMByAdmin) .ByMe}}
+                {{if eq .PostType 1}}
+                    <div class="post-content-memo">
+                        <img class="post-memo" src="{{.BodyText}}">
+                    </div>
+                {{else}}
+                    <div class="post-content-text">{{.Body}}</div>
+                {{end}}
+                {{if .Image}}
+                    {{if eq .AttachmentType 1}}
+                        <a class="screenshot-container">
+                            <audio controls preload="none" src="{{.Image}}"></audio>
+                        </a>
+                    {{else if eq .AttachmentType 2}}
+                        <div class="screenshot-container still-image">
+                            <video controls preload="none" src="{{.Image}}"></video>
+                        </div>
+                    {{else}}
+                        <div class="screenshot-container still-image">
+                            <img src="{{.Image}}">
+                        </div>
+                    {{end}}
+                {{end}}
+                {{if .URL}}
+                    {{if eq .URLType 1}}
+                        <div class="screenshot-container video">
+                            <iframe src="https://www.youtube.com/embed/{{.URL}}" frameborder="0" allowfullscreen="true"></iframe>
+                        </div>
+                    {{else if eq .URLType 2}}
+                        <div class="screenshot-container video">
+                            <iframe src="https://open.spotify.com/embed/track/{{.URL}}" frameborder="0" allow="encrypted-media"></iframe>
+                        </div>
+                    {{else if eq .URLType 3}}
+                        <div class="screenshot-container video audio">
+                            <iframe class="audio" src="https://w.soundcloud.com/player/?url={{.URL}}&auto_play=false&show_artwork=true&color=8000ff" frameborder="0"></iframe>
+                        </div>
+                    {{else}}
+                        <p class="url-link">
+                            <a class="link-confirm" href="{{.URL}}" target="_blank">{{.URL}}</a>
+                        </p>
+                    {{end}}
+                {{end}}
+                {{if and .IsSpoiler (not .ByMe)}}
+                    <div class="hidden-content">
+                        <p>This post contains spoilers.</p>
+                        <button type="button" class="hidden-content-button">View Post</button>
+                    </div>
+                {{end}}
+                {{if eq .PostType 2}}
+                    {{template "poll.html" .Poll}}
+                {{end}}
+                {{if .RepostID}}
+                    {{template "render_post.html" .Repost}}
+                {{end}}
+                {{if and (lt .Type 3) (not .IsRMByAdmin)}}
+                    <div class="post-meta">
+                        <button type="button" {{if not .CanYeah}}disabled{{end}} class="symbol submit yeah-button
+                        {{if not .CanYeah}} disabled{{end}}
+                        {{if .Yeahed}} yeah-added{{end}}
+                        " data-feeling="{{.Feeling}}" data-action="/posts/{{.ID}}/yeah" data-url-id="{{.ID}}">
+                            <span class="yeah-button-text">
+                                {{if .Yeahed}}
+                                    {{if eq .Feeling 6}}
+                                        Unepic
+                                    {{else if eq .Feeling 7}}
+                                        Unnyeah
+                                    {{else if eq .Feeling 8}}
+                                        Unyes
+                                    {{else if eq .Feeling 9}}
+                                        olv.portal.miitoo.delete
+                                    {{else}}
+                                        Unyeah
+                                    {{end}}
+                                {{else}}
+                                    {{if eq .Feeling 2}}
+                                        Yeah♥
+                                    {{else if eq .Feeling 3}}
+                                        Yeah!?
+                                    {{else if or (eq .Feeling 4) (eq .Feeling 5)}}
+                                        Yeah...
+                                    {{else if eq .Feeling 6}}
+                                        Epic!
+                                    {{else if eq .Feeling 7}}
+                                        Nyeah~♥
+                                    {{else if eq .Feeling 8}}
+                                        Yes!
+                                    {{else if eq .Feeling 9}}
+                                        olv.portal.miitoo.
+                                    {{else}}
+                                        Yeah!
+                                    {{end}}
+                                {{end}}
+                        </span>
+                    </button>
+                        <div class="yeah symbol"><span class="symbol-label">Yeahs</span><span class="yeah-count">{{.YeahCount}}</span></div>
+                        {{if gt .CommentCount -1}}<div class="reply symbol"><span class="symbol-label">Comments</span><span class="reply-count">{{.CommentCount}}</span></div>{{end}}
+                    </div>
+                    {{if .CommentPreview.BodyText}}
+                        {{template "render_comment_preview.html" .}}
+                    {{end}}
+                {{end}}
+            {{end}}
+        </div>
+    </div>
+{{end}}

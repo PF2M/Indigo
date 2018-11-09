@@ -1,0 +1,69 @@
+{{if eq .Offset 20}}
+    {{if .Pjax}}
+        {{template "header.html" .}}
+        <meta property="og:profile:username" content="{{.User.Username}}">
+        <meta property="og:description" content="{{if .Sidebar.Profile.Comment}}{{.Sidebar.Profile.Comment}}{{else}}View {{.User.Nickname}}'s {{.Sidebar.ProfileOnPage}} on Indigo.{{end}}">
+        {{if .Sidebar.Profile.FavoritePostImage}}<meta property="og:image" content="{{.Sidebar.Profile.FavoritePostImage}}">{{end}}
+    {{else}}
+        <title>{{.Title}} - Indigo</title>
+    {{end}}
+    <div id="main-body">
+        {{template "profile_sidebar.html" .Sidebar}}
+        <div class="main-column">
+            <div class="post-list-outline">
+                <h2 class="label">{{.Title}}</h2>
+                <div class="list follow-list">
+{{end}}
+                <ul class="list-content-with-icon-and-text arrow-list" id="friend-list-content" data-next-page-url="{{if .Users}}?&offset={{.Offset}}{{end}}">
+                    {{if .Users}}
+                        {{range $user := .Users}}
+                            <li class="trigger" data-href="/{{if eq $.Sidebar.ProfileOnPage "favorites"}}communities/{{$user.ID}}{{else}}users/{{$user.Username}}{{end}}">
+                                <a href="/{{if eq $.Sidebar.ProfileOnPage "favorites"}}communities/{{$user.ID}}{{else}}users/{{$user.Username}}{{end}}"{{if not (eq $.Sidebar.ProfileOnPage "favorites")}} username="{{$user.Username}}"{{end}} class="icon-container
+                                {{if not (eq $.Sidebar.ProfileOnPage "favorites")}}
+                                    {{if not $user.HideOnline}}
+                                        {{if $user.Online}}
+                                            online
+                                        {{else}}
+                                            offline
+                                        {{end}}
+                                    {{end}}
+				                {{end}}
+                                {{if $user.Role.Image}} official-user"><img src="{{$user.Role.Image}}" class="official-tag">{{else}}">{{end}}
+                                    <img src="{{$user.Avatar}}" class="icon">
+                                </a>
+                                <div class="body">
+                                    <p class="title">
+                                        <span class="nick-name"><a href="/{{if eq $.Sidebar.ProfileOnPage "favorites"}}communities/{{$user.ID}}{{else}}users/{{$user.Username}}{{end}}"{{if $user.Color}} style="color:{{$user.Color}}"{{end}}>{{$user.Nickname}}</a></span>
+                                        <span class="id-name">{{$user.Username}}</span>
+                                    </p>
+                                    <p class="text">{{$user.Comment}}</p>
+                                </div>
+                            </li>
+                        {{end}}
+                    {{else}}
+                        {{if eq .Offset 20}}
+                            <div class="no-content"><p>
+                            {{if eq .Sidebar.ProfileOnPage "friends"}}
+                                No friends to display.
+                            {{else if eq .Sidebar.ProfileOnPage "following"}}
+                                No followed users.
+                            {{else if eq .Sidebar.ProfileOnPage "followers"}}
+                                No following users.
+                            {{else if eq .Sidebar.ProfileOnPage "favorites"}}
+                                No favorited communities.
+                            {{else}}
+                                This user doesn't have any... whatever those are.
+                            {{end}}
+                            </p></div>
+                        {{end}}
+                    {{end}}
+                </ul>
+{{if eq .Offset 20}}
+                </div>
+            </div>
+        </div>
+    </div>
+    {{if .Pjax}}
+        {{template "footer.html"}}
+    {{end}}
+{{end}}

@@ -1,0 +1,69 @@
+{{if .Pjax}}
+	{{template "header.html" .}}
+	<meta property="og:description" content="Indigo is a Miiverse clone that allows you to discuss all kinds of games and topics! With lighter administration policies and more fun features to use, Indigo will truly be the Miiverse clone to end all Miiverse clones.">
+{{else}}
+	<title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="container">
+	<div id="main-body" class="guest-top">
+		<div class="community-main">
+			<div id="community-eyecatch"></div>
+		</div>
+		<div class="community-top-sidebar">
+			<form action="/communities/search" class="search">
+				<input maxlength="32" name="query" placeholder="Search all communities" type="text"><input title="Search" type="submit" value="q">
+			</form>
+			<div class="post-list-outline index-memo">
+				<h2 class="label">Indigo</h2>
+				<h2>Welcome to Indigo!</h2>
+				<p>Indigo is a social network and Miiverse clone that allows you to discuss all kinds of topics with your fellow users.</p>
+				<p>Lots of interesting and fun features have been added to enhance your experience, and we go out of our way to make sure we're only promoting the right people, so you won't ever have to worry about your posts being ruined by a rogue administrator. You're sure to have fun here!</p>
+				<br>
+			</div>
+		</div>
+		<div class="community-main">
+			<h3 class="community-title">Featured Communities</h3>
+			<ul class="list community-list community-card-list test-community-list-item">
+				{{range $feature := .Featured}}
+					<li class="trigger" data-href="/communities/{{$feature.ID}}">
+						<img src="{{$feature.Banner}}" class="community-list-cover">
+						<div class="community-list-body">
+							<span class="icon-container">
+								<img class="icon" src="{{$feature.Icon}}">
+							</span>
+							<div class="body">
+								<a class="title" href="/communities/{{$feature.ID}}">{{$feature.Title}}</a>
+							</div>
+						</div>
+					</li>
+				{{end}}
+			</ul>
+			<h3 class="community-title">All Communities</h3>
+			<ul class="list community-list community-card-list device-new-community-list">
+				{{range $community := .Communities}}
+					<li class="trigger" data-href="/communities/{{$community.ID}}">
+						<div class="community-list-body">
+							<span class="icon-container">
+								<img class="icon" src="{{$community.Icon}}">
+							</span>
+							<div class="body">
+								<a class="title" href="/communities/{{$community.ID}}">{{$community.Title}}</a>
+							</div>
+						</div>
+					</li>
+				{{end}}
+			</ul>
+			<a href="/communities/all" class="big-button">Show more</a>
+		</div>
+		<div id="community-guide-footer">
+			<div id="guide-menu">
+				<a class="arrow-button" href="/help/rules"><span>Indigo Rules</span></a>
+				<a class="arrow-button" href="/help/legal"><span>Legal Information</span></a>
+				<a class="arrow-button" href="/help/contact"><span>Contact the Team</span></a>
+			</div>
+		</div>
+	</div>
+</div>
+{{if .Pjax}}
+	{{template "footer.html"}}
+{{end}}

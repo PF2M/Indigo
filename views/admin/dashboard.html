@@ -1,0 +1,51 @@
+{{if eq .Offset 25}}
+    {{if .Pjax}}
+        {{template "header.html" .}}
+    {{else}}
+        <title>{{.Title}} - Indigo</title>
+    {{end}}
+    <div id="main-body">
+        <div id="sidebar">
+            <menu id="admin-menu">
+                <li id="admin-menu-list">
+                    <ul>
+                        <li id="admin-menu-dashboard" class="selected"><a href="/admin" class="symbol"><span>Dashboard</span></a></li>
+                        {{if le .Admin.Manage.MinimumLevel .CurrentUser.Level}}<li id="admin-menu-manage"><a href="/admin/manage" class="symbol"><span>Manage</span></a></li>{{end}}
+                        {{if le .Admin.Settings.MinimumLevel .CurrentUser.Level}}<li id="admin-menu-settings"><a href="/admin/settings" class="symbol"><span>Settings</span></a></li>{{end}}
+                    </ul>
+                </li>
+            </menu>
+        </div>
+        <div class="main-column">
+            <div class="admin-dashboard">
+                <div id="postsz">
+                    <div class="body-content" id="community-post-list">
+{{end}}
+                    <div class="list post-list js-post-list"{{if .Reports}} data-next-page-url="?offset={{.Offset}}"{{end}}>
+                        {{if .Reports}}
+                            {{range $report := .Reports}}
+                                <div id="{{$report.ID}}" class="report post post-list-outline">
+                                    <p class="user-name">Reported by: <a href="/users/{{$report.ByUsername}}"{{if $report.ByColor}} style="color:{{$report.ByColor}}"{{end}}>{{$report.ByNickname}}</a></p>
+                                    <code class="report-message">{{$report.Message}}</code>
+                                    {{template "render_post.html" $report.Post}}
+                                    <div class="form-buttons">
+                                        <button class="report-action-button gray-button" type="button" data-action="/reports/{{$report.ID}}/ignore">Ignore</button><button class="report-action-button black-button" type="button" data-action="/{{if eq $report.Type 1}}comment{{else if eq $report.Type 2}}user{{else}}post{{end}}s/{{$report.Post.ID}}/delete">Delete</button>
+                                    </div>
+                                </div>
+                            {{end}}
+                        {{else if eq .Offset 25}}
+                            <div class="no-content no-post-content post-list-outline">
+                                <p>No posts have been reported yet.</p>
+                            </div>
+                        {{end}}
+                    </div>
+{{if eq .Offset 25}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{if .Pjax}}
+        {{template "footer.html"}}
+    {{end}}
+{{end}}

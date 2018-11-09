@@ -1,0 +1,333 @@
+{{if and (.User.Theme) (not (eq .ProfileOnPage "settings"))}}
+    <style id="theme">
+            :root {
+				--theme: {{index .User.ThemeColors 0}};
+				--theme-light: {{index .User.ThemeColors 1}};
+				--theme-dark: {{index .User.ThemeColors 2}};
+				--theme-darker: {{index .User.ThemeColors 3}};
+			}
+    </style>
+    <link rel="stylesheet" type="text/css" href="/assets/css/color.css">
+{{end}}
+<div id="sidebar" class="user-sidebar{{if eq .ProfileOnPage "main"}} profile-top{{end}}">
+     <div class="sidebar-container">
+        {{if .Profile.FavoritePostID}}
+            <a href="/posts/{{.Profile.FavoritePostID}}" id="sidebar-cover" style="background-image:url({{.Profile.FavoritePostImage}})">
+                <img src="{{.Profile.FavoritePostImage}}" class="sidebar-cover-image">
+            </a>
+        {{end}}
+         <div id="sidebar-profile-body"{{if .Profile.FavoritePostID}} class="with-profile-post-image"{{end}}>
+            <div username="{{.User.Username}}" class="icon-container
+            {{if not .User.HideOnline}}
+                {{if .User.Online}}
+                    online
+                {{else}}
+                    offline
+                {{end}}
+            {{end}}
+            {{if .User.Role.Image}}official-user"><img src="{{.User.Role.Image}}" class="official-tag">{{else}}">{{end}}
+                <a href="/users/{{.User.Username}}"><img src="{{.User.Avatar}}" alt="{{.User.Username}}" class="icon"></a>
+            </div>
+	    {{if .User.Role.Organization}}<p class="user-organization">{{.User.Role.Organization}}</p>{{end}}
+            <a href="/users/{{.User.Username}}" class="nick-name"{{if .User.Color}} style="color:{{.User.Color}}"{{end}}>{{.User.Nickname}}</a>
+            <p class="id-name">{{.User.Username}}</p>
+        </div>
+         {{if (and (not (eq .User.ID .CurrentUser.ID)) (.CurrentUser.Username))}}
+             <div class="user-action-content">
+                 <div class="toggle-button">
+                    <button type="button" data-action="/users/{{.User.Username}}/follow" class="follow-button button symbol{{if .IsFollowing}} none{{end}}">Follow</button>
+                    <button type="button" data-action="/users/{{.User.Username}}/unfollow" class="unfollow-button button symbol{{if not .IsFollowing}} none{{end}}" data-screen-name="{{.User.Nickname}}">Follow</button>
+                    {{if and (eq .FriendStatus 0) (or (eq .Profile.AllowFriend 0) (and (eq .Profile.AllowFriend 1) .IsFollowingMe))}}<button type="button" data-action="/users/{{.User.Username}}/friend_new" class="friend-button create button symbol">Send friend request</button>{{end}}
+                    {{if eq .FriendStatus 1}}<button type="button" data-action="/users/{{.User.Username}}/friend_accept" data-screen-name="{{.User.Nickname}}" data-time="{{.RequestTime}}" data-msg="q" class="friend-button accept button symbol">Become friends</button>{{end}}
+                    {{if eq .FriendStatus 2}}<button type="button" data-action="/users/{{.User.Username}}/friend_cancel" data-screen-name="{{.User.Nickname}}" class="friend-button unf cancel button symbol">Cancel friend request</button>{{end}}
+                    {{if eq .FriendStatus 3}}<button type="button" data-action="/users/{{.User.Username}}/friend_delete" data-screen-name="{{.User.Nickname}}" class="friend-button unf delete button symbol">Friends</button>{{end}}
+                    <div class="report-buttons-content">
+                        <button type="button" class="report-button report-user" data-track-label="user" data-track-action="openReportModal" data-track-category="reportViolator" data-modal-open="#report-violator-page">Report Violation</button>
+                        <button type="button" class="report-button block-button {{if .User.Blocked}}unblock">Unblock{{else}}block">Block{{end}}</button>
+                    </div>
+                </div>
+                {{if eq .FriendStatus 0}}
+                    <div class="dialog none" data-modal-types="post-friend-request">
+                        <div class="dialog-inner">
+                            <div class="window">
+                                <h1 class="window-title">Send friend request to {{.User.Nickname}}</h1>
+                                <div class="window-body">
+                                    <p class="description">
+                                        Friend Request: <img width="36px" height="36px" src="{{.User.Avatar}}">{{.User.Nickname}}
+                                    </p>
+                                    <form method="post">
+                                        <textarea name="body" class="textarea" maxlength="2000" data-placeholder="Write a friend request here." placeholder="Write a friend request here."></textarea>
+                                        <div class="form-buttons">
+                                            <input type="button" class="olv-modal-close-button gray-button" value="Cancel">
+                                            <input type="submit" value="Send" class="post-button black-button">
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {{else if eq .FriendStatus 1}}
+                    <div class="dialog none" data-modal-types="accept-friend-request" data-screen-name="{{.User.Nickname}}" data-reject-action="/users/{{.User.Username}}/friend_reject" data-action="/users/{{.User.Username}}/friend_accept" uuid="{{.Request.ID}}">
+                        <div class="dialog-inner">
+                            <div class="window">
+                                <h1 class="window-title">Friend Request from {{.User.Nickname}} at {{.Request.CreatedAt}}</h1>
+                                <div class="window-body">
+                                    <div id="sidebar-profile-body">
+                                        <div username="{{.User.Username}}" class="icon-container {{if not .User.HideOnline}}{{if .User.Online}}online{{else}}offline{{end}}{{end}}{{if .User.Role.Image}} official-user"><img src="{{.User.RoleImage}}" class="official-tag">{{else}}">{{end}}
+                                            <a href="/users/{{.User.Username}}"><img src="{{.User.Avatar}}" alt="{{.User.Nickname}}" class="icon"></a>
+                                        </div>
+                                        {{if .User.Role.Organization}}<p class="user-organization">{{.User.Role.Organization}}</p>{{end}}
+                                        <a href="/users/{{.User.Username}}" class="nick-name"{{if .User.Color}} style="color:{{.User.Color}}"{{end}}>{{.User.Nickname}}</a>
+                                        <p class="id-name">{{.User.Username}}</p>
+                                    </div>
+                                    {{if .Request.Message}}<pre>{{.Request.Message}}</pre>{{end}}
+                                    <p class="window-body-content">Accept {{.User.Nickname}}'s friend request?</p>
+                                    <div class="form-buttons three">
+                                        <button class="olv-modal-close-button gray-button" data-event-type="cancel" type="button">Cancel</button>
+                                        <button class="cancel-button gray-button" type="button">Reject</button>
+                                        <button class="ok-button post-button black-button" data-event-type="ok" type="button">Accept</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {{end}}
+            </div>
+            <div id="report-violator-page" class="dialog none" data-modal-types="report report-violator" data-is-template="1">
+                <div class="dialog-inner">
+                    <div class="window">
+                        <h1 class="window-title">Report this User to Indigo Administration</h1>
+                        <div class="window-body">
+                            <form method="post" action="/users/{{.User.Username}}/violators">
+                                <input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+                                <p class="description">You are about to report a user for violating the Indigo Rules. This report will be sent to the Indigo administration and not to the user you are reporting.</p>
+                                <div class="select-content">
+                                    <span class="select-button-label">Violation Type: </span>
+                                    <div class="select-button test-report-type-button">
+                                        <select name="type">
+                                            <option selected value>Make a selection.</option>
+                                            {{range $index, $reason := .Reasons}}
+                                                {{if $reason.Enabled}}
+                                                    <option value="{{$index}}"{{if $reason.BodyRequired}} data-body-required="1"{{end}}>{{$reason.Name}}</option>
+                                                {{end}}
+                                            {{end}}
+                                        </select>
+                                    </div>
+                                </div>
+                                <textarea name="body" class="textarea" maxlength="100" placeholder="Enter a reason for the report here."></textarea>
+                                <p class="violator-id">Username: {{.User.Username}}</p>
+                                <div class="form-buttons">
+                                    <input type="button" class="olv-modal-close-button gray-button" value="Cancel">
+                                    <input type="submit" class="post-button black-button test-report-submit" value="Submit Report" data-community-id data-url-id data-track-label="user" data-title-id data-track-action="openReportModal" data-track-category="reportViolator">
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {{if not .User.Blocked}}
+                <div class="dialog none" data-modal-types="post-block">
+                    <div class="dialog-inner">
+                        <div class="window">
+                            <h1 class="window-title">Block {{.User.Nickname}}</h1>
+                            <div class="window-body">
+                                <div id="sidebar-profile-body">
+                                    <div username="{{.User.Username}}" class="icon-container{{if not .User.HideOnline}}{{if .User.Online}} online{{else}} offline{{end}}{{end}}
+                                    {{if .User.Role.Image}} official-user"><img src="{{.User.Role.Image}}" class="official-tag">{{else}}">{{end}}
+                                        <a href="/users/{{.User.Username}}">
+                                            <img src="{{.User.Avatar}}" alt="{{.User.Nickname}}" class="icon">
+                                        </a>
+                                    </div>
+                                    <a href="/users/{{.User.Username}}" class="nick-name">{{.User.Nickname}}</a>
+                                    <p class="id-name">{{.User.Username}}</p>
+                                </div>
+                                <form method="post" data-action="/users/{{.User.Username}}/block">
+                                    <p class="window-body-content">Really block this user? You won't be able to see each other's posts or profile.</p>
+                                    <div class="form-buttons">
+                                        <input type="button" class="olv-modal-close-button gray-button" value="No">
+                                        <input type="submit" value="Yes" class="post-button black-button">
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {{else}}
+                <div class="dialog none" data-modal-types="post-unblock">
+                    <div class="dialog-inner">
+                        <div class="window">
+                            <h1 class="window-title">Unblock {{.User.Nickname}}</h1>
+                            <div class="window-body">
+                                <div id="sidebar-profile-body">
+                                    <div username="{{.User.Username}}" class="icon-container{{if .User.Online}} online{{else}} offline{{end}}
+                                    {{if .User.Role.Image}} official-user"><img src="{{.User.Role.Image}}" class="official-tag">{{else}}">{{end}}
+                                        <a href="/users/{{.User.Username}}">
+                                            <img src="{{.User.Avatar}}" alt="{{.User.Nickname}}" class="icon">
+                                        </a>
+                                    </div>
+                                    <a href="/users/{{.User.Username}}" class="nick-name"{{if .User.Color}} style="color:{{.User.Color}}"{{end}}>{{.User.Nickname}}</a>
+                                    <p class="id-name">{{.User.Username}}</p>
+                                </div>
+                                <form method="post" data-action="/users/{{.User.Username}}/unblock">
+                                    <p class="window-body-content">Unblock this user?</p>
+                                    <div class="form-buttons">
+                                        <input type="button" class="olv-modal-close-button gray-button" value="No">
+                                        <input type="submit" value="Yes" class="post-button black-button">
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {{end}}
+        {{else if .CurrentUser.Username}}
+	        <div id="edit-profile-settings"><a class="button symbol" href="/settings/profile">Profile Settings</a></div>
+            <button class="button" onclick="Olv.Closed.lights()">Toggle dark mode</button>
+        {{end}}
+        <ul id="sidebar-profile-status">
+	    <li><a href="/users/{{.User.Username}}/friends" class="
+                {{if .ProfileOnPage}}
+                    {{if eq .ProfileOnPage "friends"}}selected{{end}}
+                {{end}}
+                "><span><span class="number test-following-count">{{$.Profile.FriendCount}}</span>Friends</span></a></li>
+            <li><a href="/users/{{.User.Username}}/following" class="
+                {{if .ProfileOnPage}}
+                    {{if eq .ProfileOnPage "following"}}selected{{end}}
+                {{end}}
+                "><span><span class="number test-following-count">{{$.Profile.FollowingCount}}</span>Following</span></a></li>
+            <li><a href="/users/{{.User.Username}}/followers" class="
+                {{if .ProfileOnPage}}
+                    {{if eq .ProfileOnPage "followers"}}selected{{end}}
+                {{end}}
+            "><span><span class="number test-follower-count">{{$.Profile.FollowerCount}}</span>Followers</span></a></li>
+        </ul>
+    </div>
+    <div class="sidebar-setting sidebar-container">
+        <div class="sidebar-post-menu">
+            <a href="/users/{{.User.Username}}/posts" class="sidebar-menu-post with-count symbol{{if .ProfileOnPage}}{{if eq .ProfileOnPage "posts"}} selected{{end}}{{end}}"><span>All posts</span><span class="post-count"><span class="test-post-count">{{$.Profile.PostCount}}</span></a>
+            <a href="/users/{{.User.Username}}/comments" class="sidebar-menu-replies with-count symbol{{if .ProfileOnPage}}{{if eq .ProfileOnPage "comments"}} selected{{end}}{{end}}"><span>All comments</span><span class="post-count"><span class="test-reply-count">{{$.Profile.CommentCount}}</span></a>
+            <a href="/users/{{.User.Username}}/yeahs" class="sidebar-menu-empathies with-count symbol{{if .ProfileOnPage}}{{if eq .ProfileOnPage "yeahs"}} selected{{end}}{{end}}"><span>Yeahs given</span><span class="post-count"><span class="test-empathy-count">{{$.Profile.YeahCount}}</span></a>
+        </div>
+    </div>
+    <div class="sidebar-container sidebar-profile">
+        {{if .Profile.Comment}}
+            <div class="profile-comment">
+                <div class="js-truncated-text">
+                    {{.Profile.Comment}}
+                </div>
+            </div>
+        {{end}}
+        <div class="user-data">
+            {{if .Profile.Region}}
+                <div class="data-content">
+                    <h4><span>Region</span></h4>
+                    <div class="note">
+                        <span>{{.Profile.Region}}</span>
+                    </div>
+                </div>
+            {{end}}
+            {{if .Profile.NNID}}
+                {{if (or (eq .Profile.NNIDVisibility 0) (or (or (and (eq .Profile.NNIDVisibility 1) (eq .FriendStatus 3)) (and (eq .Profile.NNIDVisibility 1) (eq .Profile.User .CurrentUser.ID))) (and (eq .Profile.NNIDVisibility 2) (eq .Profile.User .CurrentUser.ID))))}}
+                    <div class="data-content">
+                        <h4><span>NNID</span></h4>
+                        <div class="note">
+                            <span>{{.Profile.NNID}}</span>
+                        </div>
+                    </div>
+                {{end}}
+            {{end}}
+	    {{if .Profile.Twitter}}
+            <div class="data-content">
+                <h4><span>Twitter</span></h4>
+                <div class="note">
+                    <span><a href="https://twitter.com/{{.Profile.Twitter}}" target="_blank">@{{.Profile.Twitter}}</a></span>
+                </div>
+            </div>
+        {{end}}
+        {{if .Profile.Discord}}
+            <div class="data-content">
+                <h4><span>DiscordTag</span></h4>
+                <div class="note">
+                    <span>{{.Profile.Discord}}</span>
+                </div>
+            </div>
+	    {{end}}
+	    {{if .Profile.SwitchCode}}
+            <div class="data-content">
+                <h4><span>Switch FC</span></h4>
+                <div class="note">
+                    <span>{{.Profile.SwitchCode}}</span>
+                </div>
+            </div>
+	    {{end}}
+	    {{if .Profile.PSN}}
+            <div class="data-content">
+                <h4><span>PlayStation Network</span></h4>
+                <div class="note">
+                    <span>{{.Profile.PSN}}</span>
+                </div>
+            </div>
+        {{end}}
+        {{if .Profile.YouTube}}
+            <div class="data-content">
+                <h4><span>URL</span></h4>
+                <div class="note">
+                    <span><a href="{{.Profile.YouTube}}" target="_blank">{{.Profile.YouTube}}</a></span>
+                </div>
+            </div>
+	    {{end}}
+	    {{if .Profile.Steam}}
+            <div class="data-content">
+                <h4><span>Steam</span></h4>
+                <div class="note">
+                    <span>{{.Profile.Steam}}</span>
+                </div>
+            </div>
+	    {{end}}
+        <div class="data-content">
+            <h4><span>User ID</span></h4>
+            <div class="note">
+                <span>#{{.User.ID}}</span>
+            </div>
+        </div>
+        <div class="data-content">
+            <h4><span>Joined At</span></h4>
+            <div class="note">
+                <span class="update" time="{{.Profile.CreatedAtUnix}}000">{{.Profile.CreatedAt}}</span>
+            </div>
+        </div>
+        {{if not .User.HideLastSeen}}
+            <div class="data-content">
+                <h4><span>Last seen</span></h4>
+                <div class="note">
+                    <span class="update" time="{{.User.LastSeenUnix}}000">{{.User.LastSeen}}</span>
+                </div>
+            </div>
+        {{end}}
+        {{if .Profile.Gender}}
+            <div class="data-content">
+                <h4><span>Gender</span></h4>
+                <div class="note">
+                    <span>{{.Profile.Gender}}</span>
+                </div>
+            </div>
+        {{end}}
+        </div>
+    </div>
+    {{if .FavoriteCommunities}}
+        <div class="sidebar-container sidebar-favorite-community">
+            <h4><a href="/users/{{.User.Username}}/favorites" class="favorite-community-button symbol"><span>Favorite Communities</span></a></h4>
+            <ul>
+                {{range $community := .FavoriteCommunities}}
+                    <li class="favorite-community">
+                        <a href="/communities/{{$community.ID}}">
+                            <span class="icon-container">
+                                <img class="icon" src="{{$community.Icon}}">
+                            </span>
+                        </a>
+                    </li>
+                {{end}}
+            </ul>
+        </div>
+    {{end}}
+</div>

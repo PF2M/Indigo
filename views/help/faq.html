@@ -1,0 +1,24 @@
+{{if .Pjax}}
+	{{template "header.html" .}}
+	<meta property="og:description" content="If you have any questions about Indigo, this is the best place to look for an answer.">
+{{else}}
+	<title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body" class="profile-top">
+    {{template "general_sidebar.html" .}}
+    <div class="main-column" id="help">
+		<div class="post-list-outline">
+			<h2 class="label">Frequently Asked Questions (FAQ)</h2>
+			<div id="guide" class="help-content">
+				<div class="faq">
+					<p>Welcome to the FAQ page! If you have any questions about Indigo, this page will eventually answer them.</p>
+					<h2>Do eggs?</h2>
+					<p>The world may never know.</p>
+				</div>
+			</div>
+		</div>
+    </div>
+</div>
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}

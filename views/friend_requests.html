@@ -1,0 +1,74 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body">
+	{{template "general_sidebar.html" .}}
+	<div class="main-column messages">
+		<div class="post-list-outline">
+			<h2 class="label">Friend Requests</h2>
+			<div id="notification-tab-container" class="tab-container">
+				<div class="tab2">
+					<a class="tab-icon-my-news{{if .Notify}} notify{{end}}" href="/notifications">
+						<span class="symbol nf"></span>
+						<span>Updates</span>
+					</a>
+					<a class="tab-icon-my-news selected" href="/notifications/friend_requests">
+						<span class="symbol fr"></span>
+						<span>Friend Requests</span>
+					</a>
+				</div>
+			</div>
+			<div class="list news-list">
+				{{if .FriendRequests}}
+					{{$username := .CurrentUser.Username}}
+					{{range $request := .FriendRequests}}
+						<div class="dialog none" data-modal-types="accept-friend-request" data-screen-name="{{$request.ByNickname}}" data-reject-action="/users/{{$request.ByUsername}}/friend_reject" data-action="/users/{{$request.ByUsername}}/friend_accept" uuid="{{$request.ID}}">
+							<div class="dialog-inner">
+								<div class="window">
+									<h1 class="window-title">Friend Request from {{$request.ByNickname}} at <span class="update" time="{{$request.CreatedAtUnix}}000">{{$request.CreatedAt}}</span></h1>
+									<div class="window-body">
+										<div id="sidebar-profile-body">
+											<div username="{{$request.ByUsername}}" class="icon-container {{if not $request.ByHideOnline}}{{if $request.ByOnline}}online{{else}}offline{{end}}{{end}}{{if $request.ByRoleImage}} official-user"><img src="{{$request.ByRoleImage}}" class="official-tag">{{else}}">{{end}}
+												<a href="/users/{{$request.ByUsername}}"><img src="{{$request.ByAvatar}}" alt="{{$request.ByNickname}}" class="icon"></a>
+											</div>
+											{{if $request.ByRoleOrganization}}<p class="user-organization">{{$request.ByRoleOrganization}}</p>{{end}}
+											<a href="/users/{{$request.ByUsername}}" class="nick-name"{{if $request.ByColor}} style="color:{{$request.ByColor}}"{{end}}>{{$request.ByNickname}}</a>
+											<p class="id-name">{{$request.ByUsername}}</p>
+										</div>
+										{{if $request.Message}}<pre>{{$request.Message}}</pre>{{end}}
+										<p class="window-body-content">Accept {{$request.ByNickname}}'s friend request?</p>
+										<div class="form-buttons three">
+											<button class="olv-modal-close-button gray-button" data-event-type="cancel" type="button">Cancel</button>
+											<button class="cancel-button gray-button" type="button">Reject</button>
+											<button class="ok-button post-button black-button" data-event-type="ok" type="button">Accept</button>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="news-list-content{{if not $request.Read}} notify{{end}} trigger" tabindex="0" id="{{$request.ID}}" data-href="/users/{{$request.ByUsername}}">
+							<div username="{{$request.ByUsername}}" class="icon-container {{if $request.ByOnline}}online{{else}}offline{{end}}{{if $request.ByRoleImage}} official-user"><img src="{{$request.ByRoleImage}}" class="official-tag">{{else}}">{{end}}
+								<a href="/users/{{$request.ByUsername}}"><img src="{{$request.ByAvatar}}" alt="{{$request.ByNickname}}" class="icon"></a>
+							</div>
+							<div class="body">
+								<a href="/users/{{$request.ByUsername}}" class="nick-name">{{$request.ByNickname}}</a>
+								<br>
+								<span class="timestamp update" time="{{$request.CreatedAtUnix}}000">{{$request.Date}}</span>
+								<button class="button received-request-button" type="button">View friend request</button>
+							</div>
+						</div>
+					{{end}}
+				{{else}}
+					<div class="no-content">
+						<p>You have no friend requests.</p>
+					</div>
+				{{end}}
+			</div>
+		</div>
+	</div>
+</div>
+{{if .Pjax}}
+	{{template "footer.html"}}
+{{end}}

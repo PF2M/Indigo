@@ -1,0 +1,49 @@
+{{template "header.html" .}}
+<meta property="og:description" content="Create an Indigo account to interact with other users through posts, comments, messages and more!">
+<div id="main-body" class="guest">
+	<div class="main-column center">
+		<div class="post-list-outline login-page">
+			<form method="post">
+				<input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+				<img src="/assets/img/menu-logo.png">
+				<p class="lh">Sign Up</p>
+				<p>Create an Indigo account to interact with other users through posts, comments, messages and more!</p><br>
+				<p>You should be 13 years of age or older to join this site.<br>
+					<a href="/help/rules">Please read the Indigo Rules before joining.</a></p>
+				<h3 class="label"><label><span class="red">*</span> User ID: <input type="text" class="auth-input" name="username" maxlength="32" minlength="4" placeholder="ID"></label></h3>
+				<h3 class="label"><label><span class="red">*</span> Nickname: <input type="text" class="auth-input" name="nickname" maxlength="32" placeholder="Nick/Mii name?"></label></h3>
+				<label class="file-button-container">
+					<span class="input-label">Avatar Image <span>PNG, JPEG and GIF are allowed.</span></span>
+					<span class="button file-upload-button for-avatar">Upload</span>
+					<input accept="image/*" type="file" class="file-button none">
+					<input type="hidden" name="image">
+					<div class="screenshot-container still-image preview-container">
+						<img class="preview-image">
+					</div>
+					<script src="/assets/js/upload.js"></script>
+				</label>
+				<h3 class="label nnid">
+					<label>Nintendo Network ID: <input type="text" class="auth-import" name="nnid" data-action="/miis" minlength="6" maxlength="16" placeholder="Nintendo Network ID">
+						<input type="hidden" name="mh">
+						<img class="none">
+					</label>
+				</h3>
+				<h3 class="label"><label>Email address: <input type="email" class="auth-input" name="email" maxlength="255" placeholder="Email"></label></h3>
+				<h3 class="label"><label><span class="red">*</span> Password: <input type="password" class="auth-input" name="password" maxlength="32" placeholder="Password"></label></h3>
+				<h3 class="label"><label><span class="red">*</span> Confirm Password: <input type="password" class="auth-input" name="confirm" maxlength="32" placeholder="Confirm Password"></label></h3>
+				{{if .ReCAPTCHA.Enabled}}
+					<script src="https://www.google.com/recaptcha/api.js"></script>
+					<div class="g-recaptcha" style="display:inline-block" data-sitekey="{{.ReCAPTCHA.SiteKey}}"></div>
+				{{end}}
+				<p class="red" style="margin-bottom:6px"></p>
+				<button type="submit" class="button">Create account</button>
+				<div class="ll">
+					<p>All fields with a red asterisk (<span class="red">*</span>) are required.</p>
+					<p>You can change all of these fields after you sign up; except for usernames, which can only be changed by admins.</p>
+					<p>If no email address is associated with your account, you won't be able to reset your password.</p>
+				</div>
+			</form>
+		</div>
+	</div>
+</div>
+{{template "footer.html"}}

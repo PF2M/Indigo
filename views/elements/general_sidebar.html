@@ -1,0 +1,35 @@
+<div id="sidebar" class="user-sidebar">
+     {{if .CurrentUser.Username}}
+        <div class="sidebar-container">
+            <div id="sidebar-profile-body">
+                <div username="{{.CurrentUser.Username}}" class="icon-container
+                {{if not .CurrentUser.HideOnline}}
+                    {{if .CurrentUser.Online}}
+                        online
+                    {{else}}
+                        offline
+                    {{end}}
+                {{end}}
+                {{if .CurrentUser.Role.Image}} official-user"><img src="{{.CurrentUser.Role.Image}}" class="official-tag">{{else}}">{{end}}
+                    <a href="/users/{{.CurrentUser.Username}}"><img src="{{.CurrentUser.Avatar}}" alt="{{.CurrentUser.Username}}" class="icon"></a>
+                </div>
+                {{if .CurrentUser.Role.Organization}}<p class="user-organization">{{.CurrentUser.Role.Organization}}</p>{{end}}
+                <a href="/users/{{.CurrentUser.Username}}" class="nick-name"{{if .CurrentUser.Color}} style="color:{{.CurrentUser.Color}}"{{end}}>{{.CurrentUser.Nickname}}</a>
+                <p class="id-name">{{.CurrentUser.Username}}</p>
+            </div>
+            <button class="button" onclick="Olv.Closed.lights()">Toggle dark mode</button>
+            <ul id="sidebar-profile-status">
+                <li><a href="/users/{{.CurrentUser.Username}}/friends"><span><span class="number test-friend-count">{{.FriendCount}}</span>Friends</span></a></li>
+                <li><a href="/users/{{.CurrentUser.Username}}/following"><span><span class="number test-following-count">{{.FollowingCount}}</span>Following</span></a></li>
+                <li><a href="/users/{{.CurrentUser.Username}}/followers"><span><span class="number test-follower-count">{{.FollowerCount}}</span>Followers</span></a></li>
+            </ul>
+        </div>
+    {{end}}
+    <div class="sidebar-container sidebar-setting">
+        <ul>
+            <li><a href="/help/rules" class="sidebar-menu-info symbol"><span>Indigo Rules</span></a></li>
+            <li><a href="/help/legal" class="sidebar-menu-guide symbol"><span>Legal Information</span></a></li>
+            <li><a href="/help/contact" class="sidebar-menu-info symbol"><span>Contact the Team</span></a></li>
+	    </ul>
+    </div>
+</div>

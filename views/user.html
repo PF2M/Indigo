@@ -1,0 +1,50 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+    <meta property="og:profile:username" content="{{.User.Username}}">
+    <meta property="og:description" content="{{if .Sidebar.Profile.Comment}}{{.Sidebar.Profile.Comment}}{{else}}View {{.User.Nickname}}'s profile on Indigo.{{end}}">
+    {{if .Sidebar.Profile.FavoritePostImage}}<meta property="og:image" content="{{.Sidebar.Profile.FavoritePostImage}}">{{end}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body" class="profile-top">
+    {{template "profile_sidebar.html" .Sidebar}}
+    <div class="main-column">
+        <div class="post-list-outline">
+            <h2 class="label">Recent posts</h2>
+            {{if .Posts}}
+                <div class="post-body">
+                    <div class="list multi-timeline-post-list">
+                        {{range $post := .Posts}}
+                            {{template "render_user_post.html" $post}}
+                        {{end}}
+                    </div>
+                </div>
+            {{else}}
+                <div class="post-list empty">
+                    <p>The user hasn't made any posts yet.</p>
+                </div>
+            {{end}}
+        </div>
+        <a class="big-button" href="/users/{{.User.Username}}/posts">View posts</a>
+        <div class="post-list-outline">
+            <h2 class="label">Recently yeahed posts</h2>
+            {{if .Yeahs}}
+                <div class="post-body">
+                    <div class="list multi-timeline-post-list">
+                    {{range $post := .Yeahs}}
+                        {{template "render_user_post.html" $post}}
+                    {{end}}
+                    </div>
+                </div>
+            {{else}}
+                <div class="post-list empty">
+                    <p>The user hasn't given a yeah to any posts yet.</p>
+                </div>
+            {{end}}
+        </div>
+        <a class="big-button" href="/users/{{.User.Username}}/yeahs">View all yeahs</a>
+    </div>
+</div>
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}

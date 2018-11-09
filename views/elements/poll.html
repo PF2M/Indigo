@@ -1,0 +1,8 @@
+<div class="post-poll{{if .Votes}} has-votes{{end}}" data-action="/posts/{{.ID}}/vote">
+    <div class="poll-options">
+        <a class="poll-votes">{{.Votes}} vote{{if not (eq .Votes 1.0)}}s{{end}}</a>
+        {{range $option := .Options}}
+            <a class="poll-option{{if $option.Selected}} selected{{end}}" option-id="{{$option.ID}}" votes="{{$option.Votes}}"><div class="poll-background" style="width:{{$option.Percentage}}%"></div><span class="option-name" original="{{$option.Name}}">{{$option.Name}}</span><span class="percentage">{{$option.Percentage}}%<span class="vote-count"> ({{$option.Votes}} vote{{if not (eq .Votes 1.0)}}s{{end}})</span></span></a>
+        {{end}}
+    </div>
+</div>

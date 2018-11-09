@@ -1,0 +1,14 @@
+{{if .Pjax}}
+	{{template "header.html" .}}
+{{else}}
+	<title>{{.Title}} - Indigo</title>
+	<meta property="og:description" content="I AM ERROR. haha get it funny gamer reference that only true gamers will understand">
+{{end}}
+<div id="main-body">
+	<div class="no-content">
+		<p>{{.Error}}</p>
+	</div>
+</div>
+{{if .Pjax}}
+	{{template "footer.html"}}
+{{end}}

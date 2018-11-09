@@ -1,0 +1,165 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body">
+    <div id="sidebar">
+        <menu id="admin-menu">
+            <li id="admin-menu-list">
+                <ul>
+                    <li id="admin-menu-dashboard"><a href="/admin" class="symbol"><span>Dashboard</span></a></li>
+                    {{if le .Admin.Manage.MinimumLevel .CurrentUser.Level}}<li id="admin-menu-manage"><a href="/admin/manage" class="symbol"><span>Manage</span></a></li>{{end}}
+                    <li id="admin-menu-settings" class="selected"><a href="/admin/settings" class="symbol"><span>Settings</span></a></li>
+                </ul>
+            </li>
+        </menu>
+    </div>
+    <div class="main-column">
+        <div class="post-list-outline">
+            <h2 class="label">Admin Settings</h2>
+            <form class="setting-form" method="post">
+                <input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+                <ul class="settings-list admin-settings-list">
+                    <p class="settings-label">Here you can edit various global Indigo settings.<br>Any changes you make will impact the entire website. If you don't know what any of this is, LEAVE THIS PAGE NOW.</p>
+                    <li>
+                        <p class="settings-label">Image Host</p>
+                        <p class="note">Hosting Provider</p>
+                        <div class="select-content">
+                            <div class="select-button">
+                                <select name="imagehost_provider">
+                                    <option value="local"{{if eq .Settings.ImageHost.Provider "local"}} selected{{end}}>Local (not yet implemented)</option>
+                                    <option value="cloudinary"{{if eq .Settings.ImageHost.Provider "cloudinary"}} selected{{end}}>Cloudinary</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="js-not-local{{if eq .Settings.ImageHost.Provider "local"}} none{{end}}">
+                            <p class="note js-cloud-name">{{if eq .Settings.ImageHost.Provider "cloudinary"}}Cloud N{{else}}Usern{{end}}ame</p>
+                            <div class="center center-input">
+                                <input type="text" name="imagehost_username" placeholder="{{if eq .Settings.ImageHost.Provider "cloudinary"}}Cloud N{{else}}Usern{{end}}ame" value="{{.Settings.ImageHost.Username}}">
+                            </div>
+                            <p class="note js-upload-preset">{{if eq .Settings.ImageHost.Provider "cloudinary"}}Upload Preset{{else}}Password{{end}}</p>
+                            <div class="center center-input">
+                                <input type="text" name="imagehost_uploadpreset" placeholder="{{if eq .Settings.ImageHost.Provider "cloudinary"}}Upload Preset{{else}}Password{{end}}" value="{{.Settings.ImageHost.UploadPreset}}">
+                            </div>
+                            <p class="note">API Endpoint</p>
+                            <div class="center center-input">
+                                <input type="text" name="imagehost_apiendpoint" placeholder="API Endpoint" value="{{.Settings.ImageHost.APIEndpoint}}">
+                            </div>
+                        </div>
+                        <p class="note">Max Upload Size (shown to the client, not enforced)</p>
+                        <div class="center center-input">
+                            <input type="text" name="imagehost_maxuploadsize" placeholder="Max Upload Size" value="{{.Settings.ImageHost.MaxUploadSize}}">
+                        </div>
+                    </li>
+                    <li>
+                        <p class="settings-label">ReCAPTCHA</p>
+                        <label class="note">Enabled: <input type="checkbox" name="recaptcha_enabled" value="1"{{if .Settings.ReCAPTCHA.Enabled}} checked{{end}}></label>
+                        <div class="js-recaptcha-enabled{{if not .Settings.ReCAPTCHA.Enabled}} none{{end}}">
+                            <p class="note">Site Key</p>
+                            <div class="center center-input">
+                                <input type="text" name="recaptcha_sitekey" placeholder="Site Key" value="{{.Settings.ReCAPTCHA.SiteKey}}">
+                            </div>
+                            <p class="note">Secret Key (KEEP SECRET!!!!!!!!!!!!!!!!!!!!)</p>
+                            <div class="center center-input">
+                                <input type="text" name="recaptcha_secretkey" placeholder="Secret Key" value="{{.Settings.ReCAPTCHA.SecretKey}}">
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <p class="settings-label">Webhooks</p>
+                        <label class="note">Enabled: <input type="checkbox" name="webhooks_enabled" value="1"{{if .Settings.Webhooks.Enabled}} checked{{end}}></label>
+                        <div class="js-webhooks-enabled{{if not .Settings.Webhooks.Enabled}} none{{end}}">
+                            <p class="note">Report Webhook</p>
+                            <div class="center center-input">
+                                <input type="text" name="webhooks_reports" placeholder="Report Webhook" value="{{.Settings.Webhooks.Reports}}">
+                            </div>
+                            <p class="note">Signup Webhook</p>
+                            <div class="center center-input">
+                                <input type="text" name="webhooks_signups" placeholder="Signup Webhook" value="{{.Settings.Webhooks.Signups}}">
+                            </div>
+                            <p class="note">Login Webhook</p>
+                            <div class="center center-input">
+                                <input type="text" name="webhooks_logins" placeholder="Login Webhook" value="{{.Settings.Webhooks.Logins}}">
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <p class="settings-label">Email (SMTP)</p>
+                        <label class="note">Enabled: <input type="checkbox" name="smtp_enabled" value="1"{{if .Settings.SMTP.Enabled}} checked{{end}}></label>
+                        <div class="js-smtp-enabled{{if not .Settings.SMTP.Enabled}} none{{end}}">
+                            <p class="note">Hostname</p>
+                            <div class="center center-input">
+                                <input type="text" name="smtp_hostname" placeholder="SMTP Hostname" value="{{.Settings.SMTP.Hostname}}">
+                            </div>
+                            <p class="note">Port</p>
+                            <div class="center center-input">
+                                <input type="text" name="smtp_port" placeholder="SMTP Port" value="{{.Settings.SMTP.Port}}">
+                            </div>
+                            <p class="note">Email Address</p>
+                            <div class="center center-input">
+                                <input type="text" name="smtp_email" placeholder="Email Address" value="{{.Settings.SMTP.Email}}">
+                            </div>
+                            <p class="note">Password</p>
+                            <div class="center center-input">
+                                <input type="text" name="smtp_password" placeholder="Password" value="{{.Settings.SMTP.Password}}">
+                            </div>
+                        </div>
+                    </li>
+                    <!-- insert report reason editor here -->
+                    <li>
+                        <p class="settings-label">Is the site being hosted through a DNS proxy? (e.g. Cloudflare)</p>
+                        <div class="select-content">
+                            <div class="select-button">
+                                <select name="proxy">
+                                    <option value="1"{{if eq .Settings.Proxy true}} selected{{end}}>Yes</option>
+                                    <option value="0"{{if eq .Settings.Proxy false}} selected{{end}}>No</option>
+                                </select>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <p class="settings-label">Should users be forced to log in to see the site?</p>
+                        <div class="select-content">
+                            <div class="select-button">
+                                <select name="forcelogins">
+                                    <option value="1"{{if eq .Settings.ForceLogins true}} selected{{end}}>Yes</option>
+                                    <option value="0"{{if eq .Settings.ForceLogins false}} selected{{end}}>No</option>
+                                </select>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <p class="settings-label">Should users be allowed to sign up?</p>
+                        <div class="select-content">
+                            <div class="select-button">
+                                <select name="allowsignups">
+                                    <option value="1"{{if eq .Settings.AllowSignups true}} selected{{end}}>Yes</option>
+                                    <option value="0"{{if eq .Settings.AllowSignups false}} selected{{end}}>No</option>
+                                </select>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <p class="settings-label">What should the default timezone be?</p>
+                        <div class="center center-input">
+                            <input type="text" name="defaulttimezone" placeholder="Default Timezone" value="{{.Settings.DefaultTimezone}}">
+                        </div>
+                    </li>
+                    <li>
+                        <p class="settings-label">Emote Limit</p>
+                        <div class="center center-input">
+                            <input type="number" name="emotelimit" value="{{.Settings.EmoteLimit}}">
+                        </div>
+                    </li>
+                    <div class="form-buttons">
+                        <input type="submit" class="black-button apply-button" value="Save Settings">
+                    </div>
+                </ul>
+            </form>
+        </div>
+    </div>
+</div>
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}

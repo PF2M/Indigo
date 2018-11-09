@@ -1,0 +1,355 @@
+{{if .Pjax}}
+    {{template "header.html" .}}
+    <meta property="og:profile:username" content="{{.Post.PosterUsername}}">
+    <meta property="og:description" content="{{if .Post.Body}}{{.Post.Body}}{{else}}View {{.Post.PosterNickname}}'s post on Indigo.{{end}}">
+    {{if .Post.Image}}<meta property="og:{{if eq .Post.AttachmentType 1}}audio{{else if eq .Post.AttachmentType 2}}video{{else}}image{{end}}" content="{{.Post.Image}}">{{end}}
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
+<div id="main-body">
+    <div class="main-column replyform-bottom">
+        <div class="post-list-outline">
+            <section id="post-content" class="post post-subtype-default">
+                <header class="community-container">
+                    {{if .Post.MigrationImage}}
+                        <a{{if .Post.MigrationURL}} href="{{.Post.MigrationURL}}{{.Post.MigratedID}}"{{end}} class="post-migration-label">
+                            <img src="{{.Post.MigrationImage}}">
+                        </a>
+                    {{end}}
+                    <h1 class="community-container-heading">
+                        <a{{if not .Community.RM}} href="/communities/{{.Community.ID}}"{{end}}>
+                            <img src="{{.Community.Icon}}" class="community-icon">
+                            {{.Community.Title}}
+                        </a>
+                    </h1>
+                </header>
+                {{if and .CurrentUser.Username (not .Post.IsRMByAdmin)}}
+                    <div class="edit-buttons-content">
+                        {{if or (eq .Post.CreatedBy .CurrentUser.ID) (gt .CurrentUser.Level 0)}}<button type="button" class="symbol button edit-button rm-post-button" data-action="/posts/{{.Post.ID}}/delete"><span class="symbol-label">Delete</span></button>{{end}}
+                        {{if and (eq .Post.CreatedBy .CurrentUser.ID) (not (eq .Post.PostType 1))}}<button type="button" class="symbol button edit-button edit-post-button"><span class="symbol-label">Edit</span></button>{{end}}
+                        {{if and (.Post.Image) (eq .Post.AttachmentType 0)}}<button type="button" class="symbol button edit-button profile-post-button{{if .IsFavorite}} done{{end}}" data-action="/posts/{{.Post.ID}}/{{if .IsFavorite}}un{{end}}favorite"><span class="symbol-label">Set as Favorite Post</span></button>{{end}}
+                        <button type="button" class="symbol button edit-button repost-button" post="{{.Post.ID}}"><span class="symbol-label">Repost</span></button>
+                    </div>
+                    {{if not (eq .Post.CreatedBy .CurrentUser.ID)}}<div class="report-buttons-content" style="float:right"><button type="button" class="report-button" data-modal-open="#report-violation-page" data-screen-name="{{.Post.PosterNickname}}" data-support-text="#{{.Post.ID}}" data-action="/posts/{{.Post.ID}}/violations" data-can-report-spoiler="{{if .Post.IsSpoiler}}0{{else}}1{{end}}" data-track-action="openReportModal" data-track-category="reportViolation">Report Violation</button></div>{{end}}
+                {{end}}
+                <div class="user-content">
+                    <a href="/users/{{.Post.PosterUsername}}" username="{{.Post.PosterUsername}}" class="icon-container
+                    {{if not .Post.PosterHideOnline}}
+                        {{if .Post.PosterOnline}}
+                            online
+                        {{else}}
+                            offline
+                        {{end}}
+                    {{end}}
+                    {{if .Post.PosterRoleImage}} official-user"><img src="{{.Post.PosterRoleImage}}" class="official-tag">{{else}}">{{end}}
+                        <img src="{{.Post.PosterIcon}}" class="icon">
+                    </a>
+                    <div class="user-name-content">
+			            {{if .Post.PosterRoleOrganization}}<p class="user-organization">{{.Post.PosterRoleOrganization}}</p>{{end}}
+                        <p class="user-name">
+                            <a href="/users/{{.Post.PosterUsername}}"{{if .Post.PosterColor}} style="color:{{.Post.PosterColor}}"{{end}}>{{.Post.PosterNickname}}</a>
+                            <span class="user-id">{{.Post.PosterUsername}}</span>
+                        </p>
+                        <p class="timestamp-container">
+                            <span class="timestamp">
+                                <span class="update" time="{{.Post.CreatedAtUnix}}000">{{.Post.CreatedAt}}</span>
+                                {{if .Post.EditedAt}}
+                                    (Edited <span class="update" time="{{.Post.EditedAtUnix}}000">{{.Post.EditedAt}}</span>)
+                                {{end}}
+                            </span>
+                            <span class="spoiler-status{{if .Post.Pinned}} spoiler{{end}}">· Pinned</span>
+                            {{if .Post.Privacy}}
+                                <span class="spoiler-status spoiler">· Private ({{if eq .Post.Privacy 1}}Friends, Following and Followers{{else if eq .Post.Privacy 2}}Friends and Following{{else if eq .Post.Privacy 3}}Friends and Followers{{else if eq .Post.Privacy 4}}Friends Only{{else if eq .Post.Privacy 5}}Followers and Following{{else if eq .Post.Privacy 6}}Followers Only{{else if eq .Post.Privacy 7}}Following Only{{else if eq .Post.Privacy 8}}Admins Only{{else}}Only Me{{end}})</span>
+                            {{end}}
+                            <span class="spoiler-status{{if .Post.IsSpoiler}} spoiler{{end}}">· Spoilers</span>
+                        </p>
+                    </div>
+                </div>
+                <div class="body">
+                    {{if eq .Post.CreatedBy .CurrentUser.ID}}
+                        <div id="post-edit" class="none">
+                            <form data-action="/posts/{{.Post.ID}}/edit" id="edit-form" method="post">
+                                <div class="feeling-selector js-feeling-selector test-feeling-selector"><label class="symbol feeling-button feeling-button-normal checked"><input type="radio" name="feeling_id" value="0"{{if eq .Post.Feeling 0}} checked{{end}}><span class="symbol-label">normal</span></label><label class="symbol feeling-button feeling-button-happy"><input type="radio" name="feeling_id" value="1"{{if eq .Post.Feeling 1}} checked{{end}}><span class="symbol-label">happy</span></label><label class="symbol feeling-button feeling-button-like"><input type="radio" name="feeling_id" value="2"{{if eq .Post.Feeling 2}} checked{{end}}><span class="symbol-label">like</span></label><label class="symbol feeling-button feeling-button-surprised"><input type="radio" name="feeling_id" value="3"{{if eq .Post.Feeling 3}} checked{{end}}><span class="symbol-label">surprised</span></label><label class="symbol feeling-button feeling-button-frustrated"><input type="radio" name="feeling_id" value="4"{{if eq .Post.Feeling 4}} checked{{end}}><span class="symbol-label">frustrated</span></label><label class="symbol feeling-button feeling-button-puzzled"><input type="radio" name="feeling_id" value="5"{{if eq .Post.Feeling 5}} checked{{end}}><span class="symbol-label">puzzled</span></label></div>
+                                <div class="textarea-container">
+                                    <textarea name="body" class="textarea-text textarea " maxlength="2000" placeholder="Edit your post." data-required>{{.Post.BodyText}}</textarea>
+                                </div>
+                                <div class="post-form-footer-options">
+                                    <label class="spoiler-button symbol"><input id="is_spoiler" name="is_spoiler" type="checkbox" value="1"{{if .Post.IsSpoiler}} checked{{end}}>Spoilers</label>
+                                </div>
+                                <div class="post-form-privacy">
+                                    <p>Who should be able to see this post?</p>
+                                    <select class="post-form-privacy-select" name="privacy">
+                                        <option value="0"{{if eq .Post.Privacy 0}} selected{{end}}>Everyone</option>
+                                        <option value="1"{{if eq .Post.Privacy 1}} selected{{end}}>Friends, Following and Followers</option>
+                                        <option value="2"{{if eq .Post.Privacy 2}} selected{{end}}>Friends and Following</option>
+                                        <option value="3"{{if eq .Post.Privacy 3}} selected{{end}}>Friends and Followers</option>
+                                        <option value="4"{{if eq .Post.Privacy 4}} selected{{end}}>Friends Only</option>
+                                        <option value="5"{{if eq .Post.Privacy 5}} selected{{end}}>Followers and Following</option>
+                                        <option value="6"{{if eq .Post.Privacy 6}} selected{{end}}>Followers Only</option>
+                                        <option value="7"{{if eq .Post.Privacy 7}} selected{{end}}>Following Only</option>
+                                        <option value="8"{{if eq .Post.Privacy 8}} selected{{end}}>Admins Only</option>
+                                        <option value="9"{{if eq .Post.Privacy 9}} selected{{end}}>Only Me</option>
+                                    </select>
+                                </div>
+                                <div class="form-buttons">
+                                    <button type="button" class="cancel-button gray-button">Cancel</button>
+                                    <button type="submit" class="post-button black-button">Submit</button>
+                                </div>
+                            </form>
+                        </div>
+                    {{else if and (.CurrentUser.Username) (not (eq .Post.PostType 1))}}
+                        <div id="report-violation-page" class="dialog none" data-modal-types="report report-violation" data-is-template="1">
+                            <div class="dialog-inner">
+                                <div class="window">
+                                    <h1 class="window-title">Report Violation to Indigo Administrators</h1>
+                                    <div class="window-body">
+                                        <p class="description">You are about to report a post with content which violates the Indigo Rules. This report will be sent to Indigo's administrators and not to the creator of the post.</p>
+                                        <form method="post" action="/posts/{{.Post.ID}}/violations">
+                                            <input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+                                            <p class="select-button-label">Violation Type: </p>
+                                            <select name="type" class="cannot-report-spoiler">
+                                                <option selected value>Please make a selection.</option>
+                                                {{range $index, $reason := .Reasons}}
+                                                    {{if $reason.Enabled}}
+                                                        <option value="{{$index}}"{{if $reason.BodyRequired}} data-body-required="1"{{end}}>{{$reason.Name}}</option>
+                                                    {{end}}
+                                                {{end}}
+                                            </select>
+                                            <select name="type" class="can-report-spoiler">
+                                                <option selected value>Please make a selection.</option>
+                                                <option value="spoiler" data-body-required="1" data-track-action="Spoiler">Spoiler</option>
+                                                {{range $index, $reason := .Reasons}}
+                                                    {{if $reason.Enabled}}
+                                                        <option value="{{$index}}"{{if $reason.BodyRequired}} data-body-required="1"{{end}}>{{$reason.Name}}</option>
+                                                    {{end}}
+                                                {{end}}
+                                            </select>
+                                            <textarea name="body" class="textarea" maxlength="100" data-placeholder="Enter a reason for the report."></textarea>
+                                            <p class="post-id">Post ID: #{{.Post.ID}}</p>
+                                            <div class="form-buttons">
+                                                <input type="button" class="olv-modal-close-button gray-button" value="Cancel">
+                                                <input type="submit" class="post-button black-button" value="Submit Report" data-url-id="{{.Post.ID}}" data-track-action="openReportModal">
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {{end}}
+                    <div id="the-post">
+                        {{if .Post.IsRMByAdmin}}
+                            <p class="deleted-message">
+                                Deleted by administrator.<br>
+                                Post ID: #{{.Post.ID}}
+                            </p>
+                        {{end}}
+                        {{if or (not .Post.IsRMByAdmin) (eq .Post.CreatedBy .CurrentUser.ID)}}
+                            {{if eq .Post.PostType 1}}
+                                <div class="post-content-memo">
+                                    <img class="post-memo" src="{{.Post.BodyText}}">
+                                </div>
+                            {{else}}
+                                <div class="post-content-text">{{.Post.Body}}</div>
+                            {{end}}
+                            {{if .Post.Image}}
+                                {{if eq .Post.AttachmentType 1}}
+                                    <div class="screenshot-container">
+                                        <audio controls preload="none" src="{{.Post.Image}}"></audio>
+                                    </div>
+                                {{else if eq .Post.AttachmentType 2}}
+                                    <div class="screenshot-container video">
+                                        <video controls preload="none" src="{{.Post.Image}}"></video>
+                                    </div>
+                                {{else}}
+                                    <div class="screenshot-container still-image">
+                                        <img src="{{.Post.Image}}">
+                                    </div>
+                                {{end}}
+                            {{end}}
+                            {{if .Post.URL}}
+                                {{if eq .Post.URLType 1}}
+                                    <div class="screenshot-container video">
+                                        <iframe width="490" height="276" src="https://www.youtube.com/embed/{{.Post.URL}}" frameborder="0" allowfullscreen="true"></iframe>
+                                    </div>
+                                {{else if eq .Post.URLType 2}}
+                                    <div class="screenshot-container video">
+                                        <iframe width="490" height="276" src="https://open.spotify.com/embed/track/{{.Post.URL}}" frameborder="0" allow="encrypted-media"></iframe>
+                                    </div>
+                                {{else if eq .Post.URLType 3}}
+                                    <div class="screenshot-container video audio">
+                                        <iframe class="audio" src="https://w.soundcloud.com/player/?url={{.Post.URL}}&auto_play=false&show_artwork=true&color=8000ff" frameborder="0"></iframe>
+                                    </div>
+                                {{else}}
+                                    <p class="url-link">
+                                        <a class="link-confirm" href="{{.Post.URL}}" target="_blank">{{.Post.URL}}</a>
+                                    </p>
+                                {{end}}
+                            {{end}}
+                            {{if eq .Post.PostType 2}}
+                                {{template "poll.html" .Post.Poll}}
+                            {{end}}
+                            {{if .Post.RepostID}}
+                                {{template "render_post.html" .Post.Repost}}
+                            {{end}}
+                        {{end}}
+                            {{if not .Post.IsRMByAdmin}}
+                                <div class="post-meta">
+                                    <button type="button" {{if (or (eq .Post.CreatedBy .CurrentUser.ID) (not .CurrentUser.Username))}}disabled{{end}} class="symbol submit yeah-button
+                                    {{if .Post.Yeahed}} yeah-added{{end}}
+                                    {{if not .Post.CanYeah}} disabled{{end}}
+                                    " data-feeling="{{.Post.Feeling}}" data-action="/posts/{{.Post.ID}}/yeah" data-url-id="{{.Post.ID}}">
+                                        <span class="yeah-button-text">
+                                            {{if .Post.Yeahed}}
+                                                {{if eq .Post.Feeling 6}}
+                                                    Unepic
+                                                {{else if eq .Post.Feeling 7}}
+                                                    Unnyeah
+                                                {{else if eq .Post.Feeling 8}}
+                                                    Unyes
+                                                {{else if eq .Post.Feeling 9}}
+                                                    olv.portal.miitoo.delete
+                                                {{else}}
+                                                    Unyeah
+                                                {{end}}
+                                            {{else}}
+                                                {{if eq .Post.Feeling 2}}
+                                                    Yeah♥
+                                                {{else if eq .Post.Feeling 3}}
+                                                    Yeah!?
+                                                {{else if or (eq .Post.Feeling 4) (eq .Post.Feeling 5)}}
+                                                    Yeah...
+                                                {{else if eq .Post.Feeling 6}}
+                                                    Epic!
+                                                {{else if eq .Post.Feeling 7}}
+                                                    Nyeah~♥
+                                                {{else if eq .Post.Feeling 8}}
+                                                    Yes!
+                                                {{else if eq .Post.Feeling 9}}
+                                                    olv.portal.miitoo.
+                                                {{else}}
+                                                    Yeah!
+                                                {{end}}
+                                            {{end}}
+                                        </span>
+                                    </button>
+                                    <div class="yeah symbol"><span class="symbol-label">Yeahs</span><span class="yeah-count">{{.Post.YeahCount}}</span></div>
+                                    <div class="reply symbol"><span class="symbol-label">Comments</span><span class="reply-count">{{.Post.CommentCount}}</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    <div id="yeah-content"{{if not (or (.Yeahs) (.Post.Yeahed))}} class="none"{{end}}>
+                        <a href="/users/{{.CurrentUser.Username}}" class="post-permalink-feeling-icon visitor"{{if not .Post.Yeahed}} style="display: none;"{{end}}>
+                            {{if .CurrentUser.Role.Image}}<img src="{{.CurrentUser.Role.Image}}" class="official-tag">{{end}}
+                            <img src="{{.CurrentUser.Avatar}}" class="user-icon">
+                        </a>
+                        {{range $yeah := .Yeahs}}
+                            <a href="/users/{{$yeah.Username}}" id="{{$yeah.ID}}" class="post-permalink-feeling-icon">
+                                {{if $yeah.Role}}<img src="{{$yeah.Role}}" class="official-tag">{{end}}
+                                <img src="{{$yeah.Avatar}}" class="user-icon">
+                            </a>
+                        {{end}}
+                    </div>
+                    <div id="reply-content">
+                        <h2 class="reply-label">Comments</h2>
+                        <div class="no-reply-content{{if or .Comments .PinnedComments}} none{{end}}">
+                            <div>
+                                <p>This post has no comments.</p>
+                            </div>
+                        </div>
+                        {{if gt .Post.CommentCount 20}}
+                            <button data-fragment-url="/posts/{{.Post.ID}}/comments" class="more-button all-replies-button" data-reply-count="{{.Post.CommentCount}}">
+                                <span class="symbol">Show all comments ({{.Post.CommentCount}})</span>
+                            </button>
+                        {{end}}
+                        <ul class="list reply-list test-reply-list">
+                            {{range $comment := .PinnedComments}}
+                                {{template "render_comment.html" $comment}}
+                            {{end}}
+                            {{range $comment := .Comments}}
+                                {{template "render_comment.html" $comment}}
+                            {{end}}
+                        </ul>
+                    </div>
+                    <h2 class="reply-label">Add a Comment</h2>
+                {{if (and (.CurrentUser.Username) (not .IsBlocked))}}
+                    <form id="reply-form" class="for-identified-user" method="post" action="/posts/{{.Post.ID}}/comments">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+                        <div class="feeling-selector js-feeling-selector"><label class="symbol feeling-button feeling-button-normal checked"><input type="radio" name="feeling_id" value="0" checked><span class="symbol-label">normal</span></label><label class="symbol feeling-button feeling-button-happy"><input type="radio" name="feeling_id" value="1"><span class="symbol-label">happy</span></label><label class="symbol feeling-button feeling-button-like"><input type="radio" name="feeling_id" value="2"><span class="symbol-label">like</span></label><label class="symbol feeling-button feeling-button-surprised"><input type="radio" name="feeling_id" value="3"><span class="symbol-label">surprised</span></label><label class="symbol feeling-button feeling-button-frustrated"><input type="radio" name="feeling_id" value="4"><span class="symbol-label">frustrated</span></label><label class="symbol feeling-button feeling-button-puzzled"><input type="radio" name="feeling_id" value="5"><span class="symbol-label">puzzled</span></label></div>
+                        <div class="textarea-with-menu active-text">
+                            <menu class="textarea-menu">
+                                <li><label class="textarea-menu-text"><input type="radio" name="post_type" value="0"></label></li>
+                                <li><label class="textarea-menu-memo"><input type="radio" name="post_type" value="1"></label></li>
+                                <span class="character-count">2000</span>
+                            </menu>
+                            <div class="textarea-container">
+                                <textarea name="body" class="textarea-text textarea" maxlength="2000" placeholder="Add a comment here." data-open-folded-form data-required></textarea>
+                            </div>
+                            <div class="textarea-memo none">
+                                <div id="memo-drawboard-page" class="none">
+                                    <div class="window-body">
+                                        <div class="memo-buttons">
+                                            <button type="button" class="artwork-clear"></button>
+                                            <button type="button" class="artwork-undo"></button>
+                                            <button type="button" class="artwork-pencil small selected"></button>
+                                            <button type="button" class="artwork-eraser small"></button>
+                                            <button type="button" class="artwork-fill"></button>
+                                            <input type="text" class="artwork-color">
+                                            <button type="button" class="artwork-zoom"></button>
+                                        </div>
+                                        <div class="memo-canvas">
+                                            <canvas id="artwork-canvas" zoom="2"></canvas>
+                                            <canvas id="artwork-canvas-undo"></canvas>
+                                            <canvas id="artwork-canvas-redo"></canvas>
+                                            <input type="hidden" name="painting">
+                                        </div>
+                                        <div class="form-buttons">
+                                            <input class="olv-modal-close-button black-button memo-finish-btn" type="button" value="Save">
+                                            <button type="button" class="artwork-lock none"></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <label class="file-button-container">
+                            <span class="input-label">Attachment <span>Images, audio and videos are allowed.
+                                {{if .MaxUploadSize}}Maximum upload size: {{.MaxUploadSize}}{{end}}
+                            </span></span>
+                            <span class="button file-upload-button">Upload</span>
+                            <input accept="image/*, audio/*, video/*" type="file" class="file-button none">
+                            <input type="hidden" name="image">
+                            <input type="hidden" name="attachment_type">
+                            <div class="screenshot-container still-image preview-container" style="display: none;">
+                                <img class="preview-image none">
+                                <video class="preview-video none" controls></video>
+                                <audio class="preview-audio none" controls></audio>
+                            </div>
+                            <script src="/assets/js/upload.js"></script>
+                        </label>
+                        <div class="post-form-footer-options">
+                            <div class="post-form-footer-option-inner post-form-spoiler js-post-form-spoiler test-post-form-spoiler">
+                            <label class="spoiler-button symbol"><input type="checkbox" id="is_spoiler" name="is_spoiler" value="1">Spoilers</label>
+                            </div>
+                        </div>
+                        <div class="form-buttons">
+                            <input type="submit" class="black-button reply-button disabled" value="Send" data-community-id="{{.Community.ID}}" data-url-id="{{.Post.ID}}" data-post-content-type="text" data-post-with-screenshot="nodata" disabled>
+                        </div>
+                    </form>
+                {{else if .IsBlocked}}
+                    <div class="cannot-reply">
+                        <p>You cannot comment on this post.</p>
+                    </div>
+                {{else}}
+                    <div class="guest-message">
+                        <p>You must sign in to post a comment.<br><br>Sign in with an Indigo account to connect to users around the world through games, topics and messages.</p>
+                        <a href="/signup" class="arrow-button"><span>Sign Up</span></a>
+                        <a href="/login" class="arrow-button"><span>Log In</span></a>
+                    </div>
+                {{end}}
+            </div>
+        {{end}}
+    </div>
+</div>
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}
