@@ -112,6 +112,7 @@ type config struct {
 	}
 	CSRFSecret      string
 	IPHubKey        string
+	MiiEndpointPrefix string
 	Proxy           bool
 	ForceLogins     bool
 	AllowSignups    bool

@@ -39,8 +39,9 @@
 		"Email": "",
 		"Password": ""
 	},
-	"CSRFSecret": "105261EE7CDCB065B095B9FE3FE35F0C",
+	"CSRFSecret": "105261EE7CDCB065B095B9FE3FE35F0A",
 	"IPHubKey": "",
+	"MiiEndpointPrefix": "https://pf2m.com/hash/",
 	"Proxy": false,
 	"ForceLogins": false,
 	"AllowSignups": true,

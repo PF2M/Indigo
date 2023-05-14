@@ -22,9 +22,9 @@ import (
 	// Externals
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/websocket"
-	sessions "github.com/kataras/go-sessions"
+	sessions "github.com/kataras/go-sessions/v3"
 	"github.com/microcosm-cc/bluemonday"
-	"gopkg.in/russross/blackfriday.v2"
+	"github.com/russross/blackfriday/v2"
 )
 
 // Inititialize sessions and other variables. Used in almost every page that uses HTML, and even some that don't.

@@ -1,2 +1,6 @@
 /config.json
 /geoip.mmdb
+*.swp
+handlers
+indigo
+config-my.json

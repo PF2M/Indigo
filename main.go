@@ -46,7 +46,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/oschwald/geoip2-golang"
-	"gopkg.in/russross/blackfriday.v2"
+	"github.com/russross/blackfriday/v2"
 )
 
 // Initialize some variables.
@@ -156,7 +156,11 @@ func main() {
 	defer db.Close()
 
 	// Set up CSRF.
-	CSRF := csrf.Protect([]byte(settings.CSRFSecret), csrf.FieldName("csrfmiddlewaretoken"), csrf.Path("/"))
+	csrfSecureOption := csrf.Secure(false)
+	if settings.SSL.Enabled {
+		csrfSecureOption = csrf.Secure(true)
+	}
+	CSRF := csrf.Protect([]byte(settings.CSRFSecret), csrf.FieldName("csrfmiddlewaretoken"), csrf.Path("/"), csrfSecureOption)
 
 	// Initialize routes.
 	r := mux.NewRouter()
@@ -291,14 +295,16 @@ func main() {
 
 	// Start the server.
 	if settings.SSL.Enabled && settings.Port != ":80" {
-		csrf.Secure(true)
-		go http.ListenAndServe(":80", http.HandlerFunc(redirect)) // Redirect HTTP requests to the HTTPS site.
+		// simultaneously run a plain http server to redirect http requests to the https site
+		go http.ListenAndServe(":80", http.HandlerFunc(redirect))
 		err = http.ListenAndServeTLS(settings.Port, settings.SSL.Certificate, settings.SSL.Key, nil)
 		if err != nil {
 			log.Fatal(err)
 		}
 	} else {
-		csrf.Secure(false)
-		go http.ListenAndServe(settings.Port, nil) // Just serve HTTP requests.
+		err = http.ListenAndServe(settings.Port, nil) // Just serve HTTP requests.
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }

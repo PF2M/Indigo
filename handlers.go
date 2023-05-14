@@ -28,7 +28,7 @@ import (
 	"github.com/badoux/checkmail"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/mux"
-	sessions "github.com/kataras/go-sessions"
+	sessions "github.com/kataras/go-sessions/v3"
 	"github.com/lucasb-eyer/go-colorful"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -1974,7 +1974,7 @@ func getMii(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Your Nintendo Network ID is invalid.", http.StatusBadRequest)
 		return
 	}
-	resp, err := http.Get("https://ariankordi.net/seth/" + nnid)
+	resp, err := http.Get(settings.MiiEndpointPrefix + nnid)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
