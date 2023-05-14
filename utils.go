@@ -792,9 +792,11 @@ func getHostname(host string) string {
 
 // Get the current user's IP.
 func getIP(r *http.Request) string {
-	if settings.Proxy && len(r.Header.Get("X-Forwarded-For")) > 0 { // Proxy sites like Cloudflare mask the IP, so grab that from the headers... if it's set in the settings, that is; otherwise, people could fake this and we'd have an impersonation exploit on our hands. (Looking at you, Seth)
-		ips := strings.Split(r.Header.Get("X-Forwarded-For"), ", ")
-		return ips[0] + settings.Port
+	ForwardedForHeader := r.Header.Get("X-Forwarded-For")
+	if settings.Proxy && len(ForwardedForHeader) > 0 { // Proxy sites like Cloudflare mask the IP, so grab that from the headers... if it's set in the settings, that is; otherwise, people could fake this and we'd have an impersonation exploit on our hands. (Looking at you, Seth)
+		//ips := strings.Split(r.Header.Get("X-Forwarded-For"), ", ")
+		//return ips[0] + settings.Port
+		return ForwardedForHeader + ":0"
 	} else {
 		return r.RemoteAddr
 	}

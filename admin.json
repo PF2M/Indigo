@@ -1,6 +1,6 @@
 {
     "Manage": {
-        "MinimumLevel": 1,
+        "MinimumLevel": 4,
         "AvailableManagers": [
             {
                 "Name": "posts",

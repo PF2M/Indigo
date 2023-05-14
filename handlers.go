@@ -40,7 +40,7 @@ func acceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -112,7 +112,7 @@ func addCommunityFavorite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 
 	vars := mux.Vars(r)
@@ -145,11 +145,11 @@ func adminBanUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 	if currentUser.Level < admin.Manage.MinimumLevel {
-		http.Redirect(w, r, "/", 301)
+		http.Redirect(w, r, "/", 302)
 		return
 	}
 
@@ -198,11 +198,11 @@ func adminUnbanUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 	if currentUser.Level < admin.Manage.MinimumLevel {
-		http.Redirect(w, r, "/", 301)
+		http.Redirect(w, r, "/", 302)
 		return
 	}
 
@@ -227,7 +227,7 @@ func blockUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -238,9 +238,14 @@ func blockUser(w http.ResponseWriter, r *http.Request) {
 	if username != currentUser.Username {
 		var user_id int
 		var usern string
-		db.QueryRow("SELECT id, username FROM users WHERE username = ?", username).Scan(&user_id, &usern)
+		var level int
+		db.QueryRow("SELECT id, username, level FROM users WHERE username = ?", username).Scan(&user_id, &usern, &level)
 		if len(usern) == 0 {
 			handle404(w, r)
+			return
+		}
+		if level > 0 {
+			http.Error(w, "You can't block admins.", http.StatusBadRequest)
 			return
 		}
 
@@ -301,7 +306,7 @@ func cancelFriendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -335,7 +340,7 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -420,6 +425,11 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "You must add a drawing.", http.StatusBadRequest)
 			return
 		}
+		db.QueryRow("SELECT value FROM images WHERE id = ?", painting).Scan(&body)
+		if body == painting {
+			http.Error(w, "Invalid drawing.", http.StatusBadRequest)
+			return
+		}
 	} else if post_type != "0" {
 		http.Error(w, "Invalid post type.", http.StatusBadRequest)
 		return
@@ -463,8 +473,8 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 
 		comments.ByMii = true
 		var data = map[string]interface{} {
-			"CanYeah":	false,
-			"Comment":	comments,
+			"CanYeah": false,
+			"Comment": comments,
 		}
 
 		data["ByMe"] = currentUser.ID == post_by
@@ -495,8 +505,8 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 		var commentCount int
 		db.QueryRow("SELECT COUNT(*) FROM comments WHERE post = ?", post_id).Scan(&commentCount)
 		data = map[string]interface{} {
-			"CommentPreview":	comments,
-			"CommentCount":		commentCount,
+			"CommentPreview": comments,
+			"CommentCount":   commentCount,
 		}
 		templates.ExecuteTemplate(&commentPreviewTpl, "render_comment_preview.html", data)
 
@@ -537,7 +547,7 @@ func createCommentYeah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -608,7 +618,7 @@ func createFollow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -670,7 +680,7 @@ func createGroupChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -724,7 +734,7 @@ func createGroupChat(w http.ResponseWriter, r *http.Request) {
 		stmt.Close()
 	}
 
-	http.Redirect(w, r, "/conversations/"+strconv.Itoa(conversationID), 301)
+	http.Redirect(w, r, "/conversations/" + strconv.Itoa(conversationID), 302)
 }
 
 // Create a post.
@@ -734,7 +744,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -825,6 +835,11 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 	} else if post_type == "1" {
 		if len(painting) == 0 {
 			http.Error(w, "You must add a drawing.", http.StatusBadRequest)
+			return
+		}
+		db.QueryRow("SELECT value FROM images WHERE id = ?", painting).Scan(&body)
+		if body == painting {
+			http.Error(w, "Invalid drawing.", http.StatusBadRequest)
 			return
 		}
 	} else if post_type == "2" {
@@ -977,7 +992,7 @@ func createPostYeah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1048,7 +1063,7 @@ func deleteComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1105,7 +1120,7 @@ func deleteCommentYeah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1147,7 +1162,7 @@ func deleteCommunityFavorite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1181,7 +1196,7 @@ func deleteFollow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1221,7 +1236,7 @@ func deleteFriend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1263,7 +1278,7 @@ func deleteGroupChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1278,7 +1293,7 @@ func deleteGroupChat(w http.ResponseWriter, r *http.Request) {
 	stmt.Exec(&conversationID, currentUser.ID)
 	stmt.Close()
 
-	http.Redirect(w, r, "/messages", 301)
+	http.Redirect(w, r, "/messages", 302)
 }
 
 // Delete a message.
@@ -1288,7 +1303,7 @@ func deleteMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1361,7 +1376,7 @@ func deletePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1434,7 +1449,7 @@ func deletePostYeah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1476,7 +1491,7 @@ func editAccountSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1517,7 +1532,7 @@ func editComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1586,7 +1601,7 @@ func editGroupChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1641,7 +1656,7 @@ func editGroupChat(w http.ResponseWriter, r *http.Request) {
 		stmt.Close()
 	}
 
-	http.Redirect(w, r, "/conversations/"+conversationID, 301)
+	http.Redirect(w, r, "/conversations/"+conversationID, 302)
 }
 
 // Edit a post.
@@ -1651,7 +1666,7 @@ func editPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1731,7 +1746,7 @@ func editProfileSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1935,7 +1950,7 @@ func favoritePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -1995,18 +2010,18 @@ func getNotificationCounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 	w.Header().Add("Content-Type", "application/json")
 
-	if(!currentUser.WebsocketsEnabled) {
+	if !currentUser.WebsocketsEnabled {
 		db.QueryRow("UPDATE users SET online = 1, last_seen = NOW() WHERE id = ?", currentUser.ID).Scan()
 		wait, _ := time.ParseDuration("50s")
 		time.AfterFunc(wait, func() {
 			var online bool
 			var lastSeen time.Time
 			db.QueryRow("SELECT online, last_seen FROM users WHERE id = ?", currentUser.ID).Scan(&online, &lastSeen)
-			if(online == true && time.Now().Sub(lastSeen).Seconds() > 45) {
+			if online == true && time.Now().Sub(lastSeen).Seconds() > 45 {
 				db.QueryRow("UPDATE users SET online = 0 WHERE id = ?", currentUser.ID).Scan()
 			}
 		})
@@ -2095,7 +2110,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -2282,7 +2297,7 @@ func leaveGroupChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -2310,7 +2325,7 @@ func leaveGroupChat(w http.ResponseWriter, r *http.Request) {
 		stmt.Close()
 	}
 
-	http.Redirect(w, r, "/messages", 301)
+	http.Redirect(w, r, "/messages", 302)
 }
 
 // Log a user in.
@@ -2435,7 +2450,7 @@ func logout(w http.ResponseWriter, r *http.Request) {
 		stmt, _ := db.Prepare("DELETE FROM login_tokens WHERE value = ?")
 		stmt.Exec(indigoAuth.Value)
 		stmt.Close()
-		cookie := http.Cookie{Path: "/", Name: "indigo-auth", MaxAge: -1, Expires: time.Now().Add(-100 * time.Hour)}
+		cookie := http.Cookie{Name: "indigo-auth", Path: "/", MaxAge: -1, Expires: time.Now().Add(-100 * time.Hour)}
 		http.SetCookie(w, &cookie)
 	}
 	if settings.ForceLogins {
@@ -2462,7 +2477,7 @@ func migratePosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -2609,7 +2624,7 @@ func newFriendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -2676,7 +2691,7 @@ func rejectFriendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -2710,7 +2725,7 @@ func reportComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -2774,11 +2789,11 @@ func reportIgnore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 	if currentUser.Level < 1 {
-		http.Redirect(w, r, "/", 301)
+		http.Redirect(w, r, "/", 302)
 		return
 	}
 
@@ -2808,7 +2823,7 @@ func reportPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -2872,7 +2887,7 @@ func reportUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -3043,7 +3058,7 @@ func rollbackImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -3067,7 +3082,7 @@ func sendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -3134,6 +3149,11 @@ func sendMessage(w http.ResponseWriter, r *http.Request) {
 	} else if post_type == "1" {
 		if len(painting) == 0 {
 			http.Error(w, "You must add a drawing.", http.StatusBadRequest)
+			return
+		}
+		db.QueryRow("SELECT value FROM images WHERE id = ?", painting).Scan(&body)
+		if body == painting {
+			http.Error(w, "Invalid drawing.", http.StatusBadRequest)
 			return
 		}
 	} else if post_type != "0" {
@@ -3324,7 +3344,7 @@ func showAccountSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -3349,7 +3369,7 @@ func showActivityFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 
 	pjax := r.Header.Get("X-PJAX") == ""
@@ -3431,11 +3451,11 @@ func showAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 	if currentUser.Level < 1 {
-		http.Redirect(w, r, "/", 301)
+		http.Redirect(w, r, "/", 302)
 		return
 	}
 
@@ -3499,11 +3519,11 @@ func showAdminManagerList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 	if currentUser.Level < admin.Manage.MinimumLevel {
-		http.Redirect(w, r, "/", 301)
+		http.Redirect(w, r, "/", 302)
 		return
 	}
 
@@ -3528,11 +3548,11 @@ func showAdminSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 	if currentUser.Level < admin.Settings.MinimumLevel {
-		http.Redirect(w, r, "/", 301)
+		http.Redirect(w, r, "/", 302)
 		return
 	}
 
@@ -3753,7 +3773,7 @@ func showBlocked(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -4078,7 +4098,7 @@ func showConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 
 	vars := mux.Vars(r)
@@ -4195,7 +4215,7 @@ func showCreateGroupChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
@@ -4248,7 +4268,7 @@ func showEditGroupChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 	vars := mux.Vars(r)
 	conversationID := vars["id"]
@@ -4533,7 +4553,7 @@ func showFriendRequests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 
 	var notify bool
@@ -4670,7 +4690,7 @@ func showGroupChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 
 	vars := mux.Vars(r)
@@ -4822,7 +4842,7 @@ func showMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
@@ -4910,7 +4930,7 @@ func showNotifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 
 	var notify bool
@@ -4964,9 +4984,9 @@ func showNotifications(w http.ResponseWriter, r *http.Request) {
 	notif_rows.Close()
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 
-	if(len(notifs) == 50) {
-		stmt, _ := db.Prepare("DELETE FROM notifications WHERE notif_to = ? AND id < ?");
-		stmt.Exec(currentUser.ID, notifs[len(notifs) - 1].ID)
+	if len(notifs) == 50 {
+		stmt, _ := db.Prepare("DELETE FROM notifications WHERE notif_to = ? AND id < ?")
+		stmt.Exec(currentUser.ID, notifs[len(notifs)-1].ID)
 		stmt.Close()
 	}
 	stmt, _ := db.Prepare("UPDATE notifications SET notif_read = 1 WHERE notif_to = ?")
@@ -5266,7 +5286,7 @@ func showProfileSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -5551,7 +5571,7 @@ func showRecentCommunities(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 
@@ -5904,7 +5924,7 @@ func showUserSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 	}
 
 	vars := mux.Vars(r)
@@ -6038,7 +6058,7 @@ func unblockUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -6088,7 +6108,7 @@ func unfavoritePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 
@@ -6254,7 +6274,7 @@ func voteOnPoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 301)
+		http.Redirect(w, r, "/login", 302)
 		return
 	}
 

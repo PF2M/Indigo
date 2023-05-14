@@ -22,7 +22,7 @@
 //  Testing: Mippy ♥  //
 //                    //
 // https://github.com //
-//    /PF2M/indigo    //
+//    /PF2M/Indigo    //
 //                    //
 ////////////////////////
 
@@ -47,6 +47,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/oschwald/geoip2-golang"
 	"github.com/russross/blackfriday/v2"
+	"github.com/NYTimes/gziphandler"
 )
 
 // Initialize some variables.
@@ -95,7 +96,7 @@ func main() {
 	}
 
 	// Connect to the database.
-	db, err = sql.Open("mysql", settings.DB.Username+":"+settings.DB.Password+"@tcp("+settings.DB.Host+")/"+settings.DB.Name+"?parseTime=true&charset=utf8mb4,utf8")
+	db, err = sql.Open("mysql", settings.DB.Username + ":" + settings.DB.Password + "@tcp(" + settings.DB.Host + ")/" + settings.DB.Name + "?parseTime=true&loc=US%2FEastern&charset=utf8mb4,utf8")
 	if err != nil {
 		log.Printf("[err]: unable to connect to the database...\n")
 		log.Printf("       %v\n", err)
@@ -285,10 +286,10 @@ func main() {
 	r.NotFoundHandler = http.HandlerFunc(handle404)
 
 	// Serve static assets.
-	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
+	r.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
 
 	// Tell the http server to handle routing with the router we just made.
-	http.Handle("/", CSRF(r))
+	http.Handle("/", gziphandler.GzipHandler(CSRF(r)))
 
 	// Tell the person who started this that we are starting the server.
 	log.Printf("listening on " + settings.Port)
