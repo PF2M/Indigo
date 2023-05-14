@@ -1,5 +1,9 @@
-{{template "header.html" .}}
-<meta property="og:description" content="Request a password reset here.">
+{{if .Pjax}}
+    {{template "header.html" .}}
+    <meta property="og:description" content="Request a password reset here.">
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
 <div id="main-body" class="guest">
 	<div class="main-column center">
 		<div class="post-list-outline login-page">
@@ -48,4 +52,6 @@
 		</div>
 	</div>
 </div>
-{{template "footer.html"}}
+{{if .Pjax}}
+    {{template "footer.html"}}
+{{end}}

@@ -36,8 +36,14 @@ import (
 	"html/template"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
+
+	// "user" is already defined in types
+	osUser "os/user"
+	"strconv"
+
 	"regexp"
 
 	// Externals
@@ -157,11 +163,7 @@ func main() {
 	defer db.Close()
 
 	// Set up CSRF.
-	csrfSecureOption := csrf.Secure(false)
-	if settings.SSL.Enabled {
-		csrfSecureOption = csrf.Secure(true)
-	}
-	CSRF := csrf.Protect([]byte(settings.CSRFSecret), csrf.FieldName("csrfmiddlewaretoken"), csrf.Path("/"), csrfSecureOption)
+	CSRF := csrf.Protect([]byte(settings.CSRFSecret), csrf.FieldName("csrfmiddlewaretoken"), csrf.Path("/"), csrf.Secure(settings.SSL.Enabled))
 
 	// Initialize routes.
 	r := mux.NewRouter()
@@ -287,25 +289,58 @@ func main() {
 
 	// Serve static assets.
 	r.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
+        r.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("images"))))
 
 	// Tell the http server to handle routing with the router we just made.
-	http.Handle("/", gziphandler.GzipHandler(CSRF(r)))
+	if settings.GzipEnabled {
+		http.Handle("/", gziphandler.GzipHandler(CSRF(r)))
+	} else {
+		http.Handle("/", CSRF(r))
+	}
 
 	// Tell the person who started this that we are starting the server.
 	log.Printf("listening on " + settings.Port)
 
 	// Start the server.
-	if settings.SSL.Enabled && settings.Port != ":80" {
-		// simultaneously run a plain http server to redirect http requests to the https site
-		go http.ListenAndServe(":80", http.HandlerFunc(redirect))
-		err = http.ListenAndServeTLS(settings.Port, settings.SSL.Certificate, settings.SSL.Key, nil)
+	if settings.ListenSocket {
+		// remove tha socket first or else
+		os.Remove(settings.Port)
+
+		unixListener, err := net.Listen("unix", settings.Port)
+		if err != nil {
+			log.Fatal("cannot listen on unix socket:", err)
+		}
+
+		// hac
+		if settings.SocketOwner != "" {
+			socketUser, err := osUser.Lookup(settings.SocketOwner)
+			if err != nil {
+				log.Fatal("could not look up user so that we can change the owner of the unix socket so that we can listen on it:\n", err)
+			}
+			// should probably handle errors here
+			uidInt, _ := strconv.Atoi(socketUser.Uid)
+			gidInt, _ := strconv.Atoi(socketUser.Gid)
+			err = os.Chown(settings.Port, uidInt, gidInt)
+			if err != nil {
+				log.Fatal("could not change socket owner", err)
+			}
+		}
+
+		err = http.Serve(unixListener, nil) // Just serve HTTP requests.
 		if err != nil {
 			log.Fatal(err)
 		}
 	} else {
-		err = http.ListenAndServe(settings.Port, nil) // Just serve HTTP requests.
-		if err != nil {
-			log.Fatal(err)
+		if settings.SSL.Enabled && settings.Port != ":80" {
+			go http.ListenAndServe(":80", http.HandlerFunc(redirect)) // Redirect HTTP requests to the HTTPS site.
+			err = http.ListenAndServeTLS(settings.Port, settings.SSL.Certificate, settings.SSL.Key, nil)
+			if err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			log.Fatal(http.ListenAndServe(settings.Port, nil))
 		}
 	}
+		
+	//}
 }

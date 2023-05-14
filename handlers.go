@@ -6,7 +6,9 @@ import (
 	// Internals
 	"bytes"
 	"crypto/md5"
+        "crypto/tls"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -24,8 +26,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"os"
+
 	// Externals
-	"github.com/badoux/checkmail"
+	//"github.com/badoux/checkmail"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/mux"
 	sessions "github.com/kataras/go-sessions/v3"
@@ -2340,12 +2344,14 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "POST" {
 		formError := r.FormValue("error")
+		pjax := r.Header.Get("X-PJAX") == ""
 		var data = map[string]interface{} {
 			"Title":        "Log In",
 			"CurrentUser":  currentUser,
 			"ForceLogins":  settings.ForceLogins,
 			"AllowSignups": settings.AllowSignups,
 			"FormError":    formError,
+			"Pjax":         pjax,
 			"CSRFField":    csrf.TemplateField(r),
 		}
 		err := templates.ExecuteTemplate(w, "login.html", data)
@@ -2367,9 +2373,10 @@ func login(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		jsonBody := make(map[string]interface{})
+		var jsonBody iphubBlockResponse
 		json.Unmarshal(body, &jsonBody)
-		if jsonBody["block"] == 1 || jsonBody["block"] == 2 {
+		if jsonBody.Block == 1 || jsonBody.Block == 2 {
+			fmt.Println("login deny ", ipHost)
 			http.Error(w, "You cannot log in using a proxy.", http.StatusBadRequest)
 			return
 		}
@@ -2418,8 +2425,9 @@ func login(w http.ResponseWriter, r *http.Request) {
 				username += " (" + users.Username + ")"
 			}
 			ip, _, err := net.SplitHostPort(getIP(r))
+			acceptLanguage := r.Header.Get("Accept-Language")
 			data := map[string]interface{} {
-				"content": fmt.Sprintf("%s just logged in from the IP %s.\n%s", escapeMarkdown(username), ip, getHostname(r.Host)+"/users/"+url.PathEscape(users.Username)),
+				"content": fmt.Sprintf("`%s` (`%s`) logged in\nUser agent: %s\nIP: `%s`\nAccept-Language: %s\nProfile: %s", users.Nickname, users.Username, escapeMarkdown(r.UserAgent()), ip, escapeMarkdown(acceptLanguage), getHostname(r.Host)+"/users/"+url.PathEscape(users.Username)),
 			}
 			jsonBytes, err := json.Marshal(data)
 			if err != nil {
@@ -2865,7 +2873,7 @@ func reportPost(w http.ResponseWriter, r *http.Request) {
 		if len(message) > 0 {
 			content += "Message: " + escapeMarkdown(message) + "\n"
 		}
-		content += "Post link:" + getHostname(r.Host) + "/posts/" + post_id
+		content += "Post link: " + getHostname(r.Host) + "/posts/" + post_id
 		data := map[string]interface{} {
 			"content": content,
 		}
@@ -5013,13 +5021,7 @@ func showNotifications(w http.ResponseWriter, r *http.Request) {
 	db.QueryRow("SELECT COUNT(*) FROM friend_requests WHERE request_to = ? AND request_read = 0", currentUser.ID).Scan(&msg.Content)
 	for client := range clients {
 		if clients[client].UserID == currentUser.ID {
-			if currentUser.Username == "PF2M" {
-				fmt.Println("trying to send notifications")
-			}
 			err := writeWs(clients[client], client, msg)
-			if currentUser.Username == "PF2M" {
-				fmt.Println("notifications sent!")
-			}
 			if err != nil {
 				client.Close()
 				delete(clients, client)
@@ -5351,9 +5353,11 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		var currentUser user
 		currentUser.CSRFToken = csrf.Token(r)
+		pjax := r.Header.Get("X-PJAX") == ""
 		var data = map[string]interface{} {
 			"Title":       "Sign Up",
 			"CurrentUser": currentUser,
+			"Pjax":        pjax,
 			"ReCAPTCHA":   settings.ReCAPTCHA,
 		}
 		err := templates.ExecuteTemplate(w, "signup.html", data)
@@ -5422,11 +5426,11 @@ func signup(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "A user already exists with that email.", http.StatusBadRequest)
 				return
 			}
-			err := checkmail.ValidateFormat(email)
+			/*err := checkmail.ValidateFormat(email)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Email error: %s", err.Error()), http.StatusBadRequest)
 				return
-			}
+			}*/
 		}
 
 		if len(avatar) > 0 {
@@ -5487,9 +5491,13 @@ func signup(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			jsonBody := make(map[string]interface{})
-			json.Unmarshal(body, &jsonBody)
-			if jsonBody["block"] == 1 || jsonBody["block"] == 2 {
+			var jsonBody iphubBlockResponse
+                	json.Unmarshal(body, &jsonBody)
+
+			var bannedASN int
+			db.QueryRow("SELECT asn FROM ip_bans WHERE asn = ?", jsonBody.ASN).Scan(&bannedASN)
+			if bannedASN != 0 || jsonBody.Block == 1 || jsonBody.Block == 2 {
+				fmt.Println("signup asn deny ", jsonBody.ASN)
 				http.Error(w, "You cannot sign up using a proxy.", http.StatusBadRequest)
 				return
 			}
@@ -5533,16 +5541,17 @@ func signup(w http.ResponseWriter, r *http.Request) {
 				session.Set("user_id", users.ID)
 
 				if settings.Webhooks.Enabled && len(settings.Webhooks.Signups) > 0 {
-					if username != nickname {
+					/*if username != nickname {
 						nickname += " (" + username + ")"
-					}
+					}*/
 					if len(email) == 0 {
 						email = "None"
 					} else {
 						email = "`" + escapeMarkdown(email) + "`"
 					}
+					acceptLanguage := r.Header.Get("Accept-Language")
 					data := map[string]interface{} {
-						"content": fmt.Sprintf("%s just signed up from the IP %s.\nEmail address: %s\nUser agent: %s\nURL: %s", escapeMarkdown(nickname), ipHost, email, escapeMarkdown(r.UserAgent()), getHostname(r.Host)+"/users/"+url.PathEscape(username)),
+						"content": fmt.Sprintf("`%s` (`%s`) signed up\nEmail: %s\nUser agent: %s\nIP: `%s`\nAccept-Language: %s\nProfile: %s", nickname, username, email, escapeMarkdown(r.UserAgent()), ipHost, escapeMarkdown(acceptLanguage), getHostname(r.Host)+"/users/"+url.PathEscape(username)),
 					}
 					jsonBytes, err := json.Marshal(data)
 					if err != nil {
@@ -5632,11 +5641,56 @@ func showResetPassword(w http.ResponseWriter, r *http.Request) {
 			stmt.Exec(token, userID)
 			stmt.Close()
 
-			auth := smtp.PlainAuth("", settings.SMTP.Email, settings.SMTP.Password, settings.SMTP.Hostname)
+			//auth := smtp.PlainAuth("", settings.SMTP.Email, settings.SMTP.Password, settings.SMTP.Hostname)
 
 			hostname := getHostname(r.Host)
-			message := fmt.Sprintf("Subject: Password reset for %s\nFrom: psy gangnam style hd download shit ass little fucking penis <%s>\nContent-Type: text/html\n\n<!DOCTYPE html><html><body><img src=\"%s/assets/img/menu-logo.png\"><br>A password reset request has been made for your account.<br>If you initiated this request, go here: <a href=\"%s/reset?token=%s\">%s/reset?token=%s</a><br>Otherwise, you can probably ignore this email, as these kinds of requests can be sent by anyone.</body></html>", username, settings.SMTP.Email, hostname, hostname, token, hostname, token)
-			err = smtp.SendMail(settings.SMTP.Hostname+settings.SMTP.Port, auth, settings.SMTP.Email, []string{email}, []byte(message))
+			message := fmt.Sprintf("Subject: Password reset for %s\nFrom: psy gangnam style hd download shit ass little fucking penis <%s>\nContent-Type: text/html\n\n<!DOCTYPE html><html><body><img src=\"%s/assets/img/menu-logo.png\"><br>A password reset request has been made for your account.<br>If you initiated this request, go here: <a href=\"%s/reset?token=%s\">%s/reset?token=%s</a><br>Otherwise, you can probably ignore this email, as these kinds of requests can be sent by anyone.</body></html>", username, settings.SMTP.Email, hostname, hostname, token, hostname)
+    c, err := smtp.Dial(settings.SMTP.Hostname+settings.SMTP.Port)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    // TLS config
+    tlsconfig := &tls.Config {
+        InsecureSkipVerify: true,
+        ServerName: r.Host,
+    }
+
+    if err = c.StartTLS(tlsconfig); err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // Auth
+    /*if err = c.Auth(auth); err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }*/
+
+    // To && From
+    if err = c.Mail(settings.SMTP.Email); err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    c.Rcpt(email)
+
+    // Data
+    wr, err := c.Data()
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    wr.Write([]byte(message))
+
+    /*err = */wr.Close()
+    /*if err != nil {
+        log.Panic(err)
+    }*/
+
+    c.Quit()
+			//err = smtp.SendMail(settings.SMTP.Hostname+settings.SMTP.Port, auth, settings.SMTP.Email, []string{email}, []byte(message))
 			if err != nil {
 				data = map[string]interface{} {
 					"Title":       "Reset Password",
@@ -5654,16 +5708,20 @@ func showResetPassword(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else if settings.SMTP.Enabled {
+		pjax := r.Header.Get("X-PJAX") == ""
 		data = map[string]interface{} {
 			"Title":       "Reset Password",
 			"CurrentUser": currentUser,
 			"Action":      "request",
+			"Pjax":        pjax,
 			"CSRFField":   csrf.TemplateField(r),
 		}
 	} else {
+		pjax := r.Header.Get("X-PJAX") == ""
 		data = map[string]interface{} {
 			"Title":       "Reset Password",
 			"CurrentUser": currentUser,
+			"Pjax":        pjax,
 			"Action":      "disabled",
 		}
 	}
@@ -6194,6 +6252,57 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+	case "local":
+		// drop image in ImageEndpoint
+		bodyData := r.FormValue("file")
+		// decode base64 image
+		commaIndex := strings.Index(bodyData, ",")
+		if commaIndex < 0 {
+			http.Error(w, "this is not a valid base64 url because there is no comma", http.StatusBadRequest)
+			return
+		}
+		// make decoder
+		bodyDecoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(bodyData[commaIndex+1:]))
+		// get file type string from mime type
+		// base64 string until data begins
+		splitForFileTypeP1 := strings.Split(bodyData[:commaIndex], "/")
+		if len(splitForFileTypeP1) < 2 {
+			http.Error(w, "string splitting confusion part 1", http.StatusBadRequest)
+			return
+		}
+		splitForFileTypeP2 := strings.Split(splitForFileTypeP1[1], ";")
+		if len(splitForFileTypeP2) < 2 {
+			http.Error(w, "string splitting confusion part 2", http.StatusBadRequest)
+			return
+		}
+		// this MIGHT????? be the file type real
+		fileTypeForNameIThink := splitForFileTypeP2[0]
+		// make output file
+		imageFilePath := settings.ImageHost.ImageEndpoint + "/" + hash + "." + fileTypeForNameIThink
+		outputFile, err := os.Create(imageFilePath)
+		if err != nil {
+			http.Error(w, "could not create output file: " + err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// copy base64 to output file
+		io.Copy(outputFile, bodyDecoder)
+		outputFile.Close()
+
+		// NOW ADD SLASH BEFORE IMAGEFILEPATH I DON'T F&CKING KNOW
+		imageFilePath = "/" + imageFilePath
+		
+		_, err = db.Exec("INSERT INTO images (value, hash) VALUES (?, ?)", imageFilePath, hash)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		var image_id string
+		err = db.QueryRow("SELECT id FROM images WHERE value = ? ORDER BY id DESC LIMIT 1", imageFilePath).Scan(&image_id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte(image_id))
 		/*	case "lambda": // WIP
 				file := &bytes.Buffer{}
 				writer := multipart.NewWriter(file)

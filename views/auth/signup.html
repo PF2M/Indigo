@@ -1,5 +1,9 @@
-{{template "header.html" .}}
-<meta property="og:description" content="Create an Indigo account to interact with other users through posts, comments, messages and more!">
+{{if .Pjax}}
+    {{template "header.html" .}}
+    <meta property="og:description" content="Create a Indigo account to interact with other users through posts, comments, messages and more!">
+{{else}}
+    <title>{{.Title}} - Indigo</title>
+{{end}}
 <div id="main-body" class="guest">
 	<div class="main-column center">
 		<div class="post-list-outline login-page">
@@ -46,4 +50,6 @@
 		</div>
 	</div>
 </div>
-{{template "footer.html"}}
+{{if .Pjax}}
+     {{template "footer.html"}}
+{{end}}

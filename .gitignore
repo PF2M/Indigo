@@ -4,3 +4,6 @@
 handlers
 indigo
 config-my.json
+config-s.json
+images/
+images/*

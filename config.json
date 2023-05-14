@@ -1,9 +1,12 @@
 {
+	"ListenSocket": false,
+	"SocketOwner": "www-data",
 	"Port": ":80",
+	"GzipEnabled": true,
 	"SSL": {
 		"Enabled": false,
-		"Certificate": "",
-		"Key": ""
+		"Certificate": "cert.pem",
+		"Key": "key.pem"
 	},
 	"DB": {
 		"Host": "localhost",
@@ -12,14 +15,14 @@
 		"Name": "indigo"
 	},
 	"ImageHost": {
-		"Provider": "cloudinary",
-		"Username": "insert-cloud-name-here",
+		"Provider": "local",
+		"Username": "reverb",
 		"APIEndpoint": "https://api.cloudinary.com",
 		"APIPublic": "",
 		"APISecret": "",
-		"ImageEndpoint": "",
-		"UploadPreset": "insert-unsigned-upload-preset-here",
-		"MaxUploadSize": ""
+		"ImageEndpoint": "images",
+		"UploadPreset": "reverb-mobile",
+		"MaxUploadSize": "25MB"
 	},
 	"Webhooks": {
 		"Enabled": false,
@@ -39,8 +42,8 @@
 		"Email": "",
 		"Password": ""
 	},
-	"CSRFSecret": "105261EE7CDCB065B095B9FE3FE35F0A",
-	"IPHubKey": "",
+	"CSRFSecret": "~9/Þ~@=,a(±®hAxb",
+	"IPHubKey": "MTIxMzY6QWpmY1lDUHBIazdlanVjb3BPMjVZMmhvM0FrYVA4RGw=",
 	"MiiEndpointPrefix": "https://pf2m.com/hash/",
 	"Proxy": false,
 	"ForceLogins": false,

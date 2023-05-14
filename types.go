@@ -70,7 +70,13 @@ type community struct {
 
 // Variable declarations for settings.
 type config struct {
+	// if this is true, then it will listen on a unix socket instead of a tcp port
+	ListenSocket bool
+	SocketOwner string
+	// if listensocket is true then port is the socket
 	Port string
+	// whether to enable gzip compression, unnecessary with a reverse proxy, absolutely necessary without one
+	GzipEnabled bool
 	SSL  struct {
 		Enabled     bool
 		Certificate string
@@ -474,4 +480,9 @@ type yeah struct {
 	Avatar   string
 	HasMii   bool
 	Role     string
+}
+
+type iphubBlockResponse struct {
+        Block    int8   `json:"block"`
+        ASN      uint16 `json:"asn""`
 }

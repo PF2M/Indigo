@@ -17,7 +17,7 @@
                 <a href="/users/{{.CurrentUser.Username}}" class="nick-name"{{if .CurrentUser.Color}} style="color:{{.CurrentUser.Color}}"{{end}}>{{.CurrentUser.Nickname}}</a>
                 <p class="id-name">{{.CurrentUser.Username}}</p>
             </div>
-            <button class="button" onclick="Olv.Closed.lights()">Toggle dark mode</button>
+            <button class="button" onclick="Olv.Closed.lights()">Toggle Dark Mode</button>
             <ul id="sidebar-profile-status">
                 <li><a href="/users/{{.CurrentUser.Username}}/friends"><span><span class="number test-friend-count">{{.FriendCount}}</span>Friends</span></a></li>
                 <li><a href="/users/{{.CurrentUser.Username}}/following"><span><span class="number test-following-count">{{.FollowingCount}}</span>Following</span></a></li>
