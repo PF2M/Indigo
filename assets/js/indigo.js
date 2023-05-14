@@ -66,7 +66,7 @@ function artworkUpdate(evt) {
 	var mousePos = getMousePos(evt);
 	if(artworkTool.type < 2) {
 	if(mousePosOld == 0) mousePosOld = mousePos;
-	if(evt.which == 1 || evt.type == 'touchmove') {
+	if(evt.originalEvent.buttons == 1 || evt.type == 'touchmove') {
 		if(artworkTool.type == 0) {
 			ctx.fillStyle = artworkColor;
 		} else {
