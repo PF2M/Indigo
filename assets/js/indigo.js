@@ -204,8 +204,9 @@ var ctx = canvas.getContext('2d');
 	}
 }
 $('.memo-finish-btn').on('click',function(){
-    var dataURL = canvas.toDataURL();
-    postFile(dataURL, "image/png", true);
+    canvas.toBlob(function(blob) {
+        postFile(blob, "image/png", true, 'image');
+    });
     Olv.Form.toggleDisabled($("input.post-button"), true);
     Olv.Form.toggleDisabled($(".memo-finish-btn"), true);
 });

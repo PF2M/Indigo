@@ -863,9 +863,8 @@ func getRoleImageAndOrganization(roleID int) (string, string) {
 	var image string
 	var organization string
 	err := db.QueryRow("SELECT image, organization FROM roles WHERE id = ?", roleID).Scan(&image, &organization)
-	if err != nil {
-		fmt.Println("can't do that")
-		fmt.Println(err.Error())
+	if err != nil && err != sql.ErrNoRows {
+		fmt.Println("role lookup failed: " + err.Error())
 	}
 	return image, organization
 }

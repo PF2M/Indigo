@@ -43,7 +43,7 @@
 		"Password": ""
 	},
 	"CSRFSecret": "~9/Þ~@=,a(±®hAxb",
-	"IPHubKey": "MTIxMzY6QWpmY1lDUHBIazdlanVjb3BPMjVZMmhvM0FrYVA4RGw=",
+	"IPHubKey": "",
 	"MiiEndpointPrefix": "https://pf2m.com/hash/",
 	"Proxy": false,
 	"ForceLogins": false,

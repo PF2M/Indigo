@@ -6,15 +6,16 @@ import (
 	// Internals
 	"bytes"
 	"crypto/md5"
-        "crypto/tls"
+	"crypto/tls"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
 	"io"
 	"io/ioutil"
+	"path/filepath"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/smtp"
@@ -6197,41 +6198,68 @@ func unfavoritePost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Upload an image.
 func uploadImage(w http.ResponseWriter, r *http.Request) {
-	if len(r.FormValue("file")) == 0 {
+	// parse multipart form with 32 mb as max memory
+	err := r.ParseMultipartForm(20 << 20)
+	if err != nil {
+		http.Error(w, "Error parsing upload form: " + err.Error(), http.StatusBadRequest)
+		return
+	}
+	// clean up files that parsemultipartform leaves at the end
+	defer r.MultipartForm.RemoveAll()
+
+	file, handler, err := r.FormFile("image")
+	if err != nil {
 		http.Error(w, "You must upload a file.", http.StatusBadRequest)
 		return
 	}
+	defer file.Close()
+
+	// make an md5 hash of this to see if it already exists in the database
 	h := md5.New()
-	io.WriteString(h, r.FormValue("file"))
-	var imageID sql.NullString
+	if _, err := io.Copy(h, file); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	hash := hex.EncodeToString(h.Sum(nil))
+
+	var imageID sql.NullString
 	db.QueryRow("SELECT id FROM images WHERE hash = ?", hash).Scan(&imageID)
 	if imageID.Valid {
+		// just give existing image's id and skip the rest
 		w.Write([]byte(imageID.String))
 		return
 	}
 
+	// prepare file for reading again by resetting reader
+	file.Seek(0, 0)
+
 	switch settings.ImageHost.Provider {
 	case "cloudinary":
-		bodyData := r.FormValue("file")
+		bodyData := &bytes.Buffer{}
+		writer := multipart.NewWriter(bodyData)
+		part, err := writer.CreateFormFile("file", handler.Filename)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		io.Copy(part, file)
+		writer.WriteField("upload_preset", settings.ImageHost.UploadPreset)
+		writer.Close()
 
-		data := url.Values{}
-		data.Set("upload_preset", settings.ImageHost.UploadPreset)
-		data.Add("file", bodyData)
-
-		resp, err := http.Post(settings.ImageHost.APIEndpoint+"/v1_1/"+settings.ImageHost.Username+"/auto/upload", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+		resp, err := http.Post(settings.ImageHost.APIEndpoint+"/v1_1/"+settings.ImageHost.Username+"/auto/upload", writer.FormDataContentType(), bodyData)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer resp.Body.Close()
+
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
 		jsonBody := make(map[string]interface{})
 		json.Unmarshal(body, &jsonBody)
 
@@ -6249,53 +6277,29 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 			}
 			w.Write([]byte(image_id))
 		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "cloudinary sent an unexpected response: \n" + string(body), http.StatusInternalServerError)
 			return
 		}
 	case "local":
-		// drop image in ImageEndpoint
-		bodyData := r.FormValue("file")
-		// decode base64 image
-		commaIndex := strings.Index(bodyData, ",")
-		if commaIndex < 0 {
-			http.Error(w, "this is not a valid base64 url because there is no comma", http.StatusBadRequest)
-			return
-		}
-		// make decoder
-		bodyDecoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(bodyData[commaIndex+1:]))
-		// get file type string from mime type
-		// base64 string until data begins
-		splitForFileTypeP1 := strings.Split(bodyData[:commaIndex], "/")
-		if len(splitForFileTypeP1) < 2 {
-			http.Error(w, "string splitting confusion part 1", http.StatusBadRequest)
-			return
-		}
-		splitForFileTypeP2 := strings.Split(splitForFileTypeP1[1], ";")
-		if len(splitForFileTypeP2) < 2 {
-			http.Error(w, "string splitting confusion part 2", http.StatusBadRequest)
-			return
-		}
-		// this MIGHT????? be the file type real
-		fileTypeForNameIThink := splitForFileTypeP2[0]
-		// make output file
-		imageFilePath := settings.ImageHost.ImageEndpoint + "/" + hash + "." + fileTypeForNameIThink
+		imageFilePath := settings.ImageHost.ImageEndpoint + "/" + hash + filepath.Ext(handler.Filename)
 		outputFile, err := os.Create(imageFilePath)
 		if err != nil {
-			http.Error(w, "could not create output file: " + err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Could not create output file: " + err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// copy base64 to output file
-		io.Copy(outputFile, bodyDecoder)
-		outputFile.Close()
+		defer outputFile.Close()
+
+		io.Copy(outputFile, file)
 
 		// NOW ADD SLASH BEFORE IMAGEFILEPATH I DON'T F&CKING KNOW
 		imageFilePath = "/" + imageFilePath
-		
+
 		_, err = db.Exec("INSERT INTO images (value, hash) VALUES (?, ?)", imageFilePath, hash)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
 		var image_id string
 		err = db.QueryRow("SELECT id FROM images WHERE value = ? ORDER BY id DESC LIMIT 1", imageFilePath).Scan(&image_id)
 		if err != nil {
@@ -6375,6 +6379,8 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 				//w.Write(body.Bytes())*/
 	}
 }
+
+
 
 // Vote on a poll.
 func voteOnPoll(w http.ResponseWriter, r *http.Request) {
