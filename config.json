@@ -3,6 +3,7 @@
 	"SocketOwner": "www-data",
 	"Port": ":80",
 	"GzipEnabled": true,
+	"CSRFProtectDisable": true,
 	"SSL": {
 		"Enabled": false,
 		"Certificate": "cert.pem",

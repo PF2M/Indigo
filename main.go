@@ -291,13 +291,17 @@ func main() {
 	r.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
         r.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("images"))))
 
-	// Tell the http server to handle routing with the router we just made.
+	var handler http.Handler = r
+
+	if !settings.CSRFProtectDisable {
+		handler = CSRF(r)
+	}
 	if settings.GzipEnabled {
-		http.Handle("/", gziphandler.GzipHandler(CSRF(r)))
-	} else {
-		http.Handle("/", CSRF(r))
+		handler = gziphandler.GzipHandler(handler)
 	}
 
+	// Tell the http server to handle routing with the router we just made.
+	http.Handle("/", handler)
 	// Tell the person who started this that we are starting the server.
 	log.Printf("listening on " + settings.Port)
 
@@ -308,10 +312,10 @@ func main() {
 
 		unixListener, err := net.Listen("unix", settings.Port)
 		if err != nil {
-			log.Fatal("cannot listen on unix socket:", err)
+			log.Fatal("cannot listen on unix socket: ", err)
 		}
 
-		// hac
+		// set socket owner but only if the value is not blank
 		if settings.SocketOwner != "" {
 			socketUser, err := osUser.Lookup(settings.SocketOwner)
 			if err != nil {

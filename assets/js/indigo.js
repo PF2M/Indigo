@@ -654,6 +654,7 @@ var Olv = Olv || {};
         onDataHrefClick: function(c) {
 			if (a(c.target).attr("data-href")) {
                 b.Net.go($(this).attr("data-href"));
+                return;
 			}
             if (!c.isDefaultPrevented() && !a(c.target).closest("a,button").length) {
                 var d = a(this);
@@ -3782,33 +3783,38 @@ function updateTime() {
         var timestamp = timestamps.eq(i);
         var since = new Date().getTime() - timestamp.attr('time');
         var time = new Date(since);
+        var timestampText;
         if(time < 1000) {
-            timestamp.text('Less than a second ago');
+            timestampText = 'Less than a second ago';
         } else if(time < 2000) {
-            timestamp.text('1 second ago');
+            timestampText = '1 second ago';
         } else if(time < 60000) {
-            timestamp.text(Math.floor(since / 1000) + ' seconds ago');
+            timestampText = Math.floor(since / 1000) + ' seconds ago';
         } else if(time < 120000) {
-            timestamp.text('1 minute ago');
+            timestampText = '1 minute ago';
         } else if(time < 3600000) {
-            timestamp.text(Math.floor(since / 1000 / 60) + ' minutes ago');
+            timestampText = Math.floor(since / 1000 / 60) + ' minutes ago';
         } else if(time < 7200000) {
-            timestamp.text('1 hour ago');
+            timestampText = '1 hour ago';
         } else if(time < 86400000) {
-            timestamp.text(Math.floor(since / 1000 / 60 / 60) + ' hours ago');
+            timestampText = Math.floor(since / 1000 / 60 / 60) + ' hours ago';
         } else if(time < 172800000) {
-            timestamp.text('1 day ago');
+            timestampText = '1 day ago';
         } else if(time < 345600000) {
-            timestamp.text(Math.floor(since / 1000 / 60 / 60 / 24) + ' days ago');
+            timestampText = Math.floor(since / 1000 / 60 / 60 / 24) + ' days ago';
         } else {
             var dateTime = new Date(parseInt(timestamp.attr('time')));
             var mariosPrincessSex = dateTime.getHours() % 12;
             if(mariosPrincessSex == 0) {
                 mariosPrincessSex = 12;
             }
-            timestamp.text((dateTime.getMonth() + 1).toString().padStart(2, "0") + "/" + dateTime.getDate().toString().padStart(2, "0") + "/" + dateTime.getFullYear() + " " + mariosPrincessSex + ":" + dateTime.getMinutes().toString().padStart(2, "0") + " " + (dateTime.getHours() >= 12 ? "PM" : "AM"));
+            timestampText = (dateTime.getMonth() + 1).toString().padStart(2, "0") + "/" + dateTime.getDate().toString().padStart(2, "0") + "/" + dateTime.getFullYear() + " " + mariosPrincessSex + ":" + dateTime.getMinutes().toString().padStart(2, "0") + " " + (dateTime.getHours() >= 12 ? "PM" : "AM");
             timestamp.removeClass('update');
         }
+        // only update the timestamp in the dom if it actually changed
+		if(timestamp[0].innerHTML != timestampText) {
+	        timestamp.text(timestampText);
+		}
     }
 }
 updateTime();

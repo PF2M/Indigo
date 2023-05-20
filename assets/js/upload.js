@@ -84,96 +84,104 @@ function postFile(file, fileType, isDrawing, inputName) {
         }
     });
 }
-function init() {
-    $(".file-button").off().on("change", function(event) {
-        console.log(event);
-        var inputName = "image";
-        if($(this).attr("id") !== undefined) inputName = $(this).attr("id");
-        if(this.files.length) {
-            Olv.Form.toggleDisabled($("input.post-button"), true);
-            $("input[name=" + inputName + "]").siblings(".file-button").attr("disabled", "disabled");
-            $("input[name=" + inputName + "]").siblings(".file-upload-button").text("Uploading...");
-            var fileType = this.files[0].type;
-            var file = this.files[0];
-            if(($(".file-upload-button").hasClass("for-avatar") || inputName === "icon") && fileType !== "image/gif") {
-                var img = new Image();
-                img.src = URL.createObjectURL(file);
-                img.onload = function() {
-                    var canvas = document.createElement("canvas");
-                    var ctx = canvas.getContext("2d");
-                        ctx.imageSmoothingQuality = "high";
-                        var size = 128, factor, startX, startY, resizeWidth, resizeHeight;
-                        canvas.width = size;
-                        canvas.height = size;
-                        if(img.width > img.height) {
-                            factor = img.width / img.height;
-                            startX = (img.width - img.height) / 2;
-                            startY = 0;
-                            resizeWidth = size * factor;
-                            resizeHeight = size;
-                        } else if(img.height > img.width) {
-                            factor = img.height / img.width;
-                            startX = 0;
-                            startY = (img.height - img.width) / 2;
-                            resizeWidth = size;
-                            resizeHeight = size * factor;
-                        } else {
-                            factor = 1;
-                            startX = 0;
-                            startY = 0;
-                            resizeWidth = size;
-                            resizeHeight = size;
-                        }
-                        ctx.drawImage(img, startX, startY, img.width, img.height, 0, 0, resizeWidth, resizeHeight);
-                        canvas.toBlob(function(blob) {
-                            postFile(blob, fileType, false, inputName);
-                        });
-                    }
-                } else {
-                    postFile(file, fileType, false, inputName);
-                }
-        } else {
-            $("input[name=image]").val("");
-            if(!$(".file-upload-button").hasClass("for-avatar")) {
-                $(".preview-container").css("display", "none");
-                checkForm();
-            }
-        }
-    });
-    $(document).on("dragover dragenter", function(event) {
-        event.stopPropagation();
-        event.preventDefault();
-        event.originalEvent.dataTransfer.dropEffect = "copy";
-    });
-    $(document).on("drop paste", function(event) {
-        if($(this).siblings(".file-button").attr("disabled")) {
-            return;
-        }
-        var files;
-        switch(event.type) {
-            case "drop":
-                files = event.originalEvent.dataTransfer.files;
-                break;
-            case "paste":
-                if(event.originalEvent.clipboardData.files.length == 0) {
-                    return;
-                }
-                files = event.originalEvent.clipboardData.files;
-                break;
-            default:
-                return;
-        }
-        event.stopPropagation();
-        event.preventDefault();
 
-        if(files[0].type.startsWith("image/") || files[0].type.startsWith("audio/") || files[0].type.startsWith("video/")) {
-            $(".file-button")[0].files = files;
-            $(".file-button").trigger("change");
-        } else {
-            Olv.showMessage("Attachment upload failed", "You can only upload images, audio or videos.");
+
+function handleChange(event) {
+    console.log(event);
+    var inputName = "image";
+    if($(this).attr("id") !== undefined) inputName = $(this).attr("id");
+    if(this.files.length) {
+        Olv.Form.toggleDisabled($("input.post-button"), true);
+        $("input[name=" + inputName + "]").siblings(".file-button").attr("disabled", "disabled");
+        $("input[name=" + inputName + "]").siblings(".file-upload-button").text("Uploading...");
+        var fileType = this.files[0].type;
+        var file = this.files[0];
+        if(($(".file-upload-button").hasClass("for-avatar") || inputName === "icon") && fileType !== "image/gif") {
+            var img = new Image();
+            img.src = URL.createObjectURL(file);
+            img.onload = function() {
+                var canvas = document.createElement("canvas");
+                var ctx = canvas.getContext("2d");
+                    ctx.imageSmoothingQuality = "high";
+                    var size = 128, factor, startX, startY, resizeWidth, resizeHeight;
+                    canvas.width = size;
+                    canvas.height = size;
+                    if(img.width > img.height) {
+                        factor = img.width / img.height;
+                        startX = (img.width - img.height) / 2;
+                        startY = 0;
+                        resizeWidth = size * factor;
+                        resizeHeight = size;
+                    } else if(img.height > img.width) {
+                        factor = img.height / img.width;
+                        startX = 0;
+                        startY = (img.height - img.width) / 2;
+                        resizeWidth = size;
+                        resizeHeight = size * factor;
+                    } else {
+                        factor = 1;
+                        startX = 0;
+                        startY = 0;
+                        resizeWidth = size;
+                        resizeHeight = size;
+                    }
+                    ctx.drawImage(img, startX, startY, img.width, img.height, 0, 0, resizeWidth, resizeHeight);
+                    canvas.toBlob(function(blob) {
+                        postFile(blob, fileType, false, inputName);
+                    });
+                }
+            } else {
+                postFile(file, fileType, false, inputName);
+            }
+    } else {
+        $("input[name=image]").val("");
+        if(!$(".file-upload-button").hasClass("for-avatar")) {
+            $(".preview-container").css("display", "none");
+            checkForm();
         }
-    });
+    }
 }
 
-$(document).off("ready, pjax:end", init).on("ready, pjax:end", init);
+function handleDropPaste(event) {
+    if($(this).siblings(".file-button").attr("disabled")) {
+        return;
+    }
+    var files;
+    switch(event.type) {
+        case "drop":
+            files = event.originalEvent.dataTransfer.files;
+            break;
+        case "paste":
+            if(event.originalEvent.clipboardData.files.length == 0) {
+                return;
+            }
+            files = event.originalEvent.clipboardData.files;
+            break;
+        default:
+            return;
+    }
+    event.stopPropagation();
+    event.preventDefault();
+
+    if(files[0].type.startsWith("image/") || files[0].type.startsWith("audio/") || files[0].type.startsWith("video/")) {
+        $(".file-button")[0].files = files;
+        $(".file-button").trigger("change");
+    } else {
+        Olv.showMessage("Attachment upload failed", "You can only upload images, audio or videos.");
+    }
+}
+
+function handleDrag(event) {
+    event.stopPropagation();
+    event.preventDefault();
+    event.originalEvent.dataTransfer.dropEffect = "copy";
+}
+
+function init() {
+    $(".file-button").off().on("change", handleChange);
+    $(document).off("dragover dragenter").on("dragover dragenter", handleDrag);
+    $(document).off("drop paste").on("drop paste", handleDropPaste);
+}
+
+$(document).off("ready", init).off("pjax:end", init).on("ready", init).on("pjax:end", init);
 init();

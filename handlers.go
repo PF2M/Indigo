@@ -15,6 +15,7 @@ import (
 	"io"
 	"io/ioutil"
 	"path/filepath"
+	"mime"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -6281,7 +6282,15 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "local":
-		imageFilePath := settings.ImageHost.ImageEndpoint + "/" + hash + filepath.Ext(handler.Filename)
+		fileExtension := filepath.Ext(handler.Filename)
+		if fileExtension == "" {
+			// if extension is not provided then use mime type
+			extensions, err := mime.ExtensionsByType(handler.Header.Get("Content-Type"))
+			if err == nil && len(extensions) != 0 {
+				fileExtension = extensions[0] // Use the first extension in the list
+			}
+		}
+		imageFilePath := settings.ImageHost.ImageEndpoint + "/" + hash + fileExtension
 		outputFile, err := os.Create(imageFilePath)
 		if err != nil {
 			http.Error(w, "Could not create output file: " + err.Error(), http.StatusInternalServerError)

@@ -72,12 +72,16 @@ type community struct {
 type config struct {
 	// if this is true, then it will listen on a unix socket instead of a tcp port
 	ListenSocket bool
+	// this can be left blank if you are listening and accessing as the same user
 	SocketOwner string
 	// if listensocket is true then port is the socket
 	Port string
-	// whether to enable gzip compression, unnecessary with a reverse proxy, absolutely necessary without one
+	// whether to enable gzip compression
+	// unnecessary with a reverse proxy, absolutely necessary without one
 	GzipEnabled bool
-	SSL  struct {
+	// will disable csrf protection which you probably want to do because it's annoying
+	CSRFProtectDisable bool
+	SSL struct {
 		Enabled     bool
 		Certificate string
 		Key         string
