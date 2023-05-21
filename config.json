@@ -10,7 +10,7 @@
 		"Key": "key.pem"
 	},
 	"DB": {
-		"Host": "localhost",
+		"Host": "mariadb",
 		"Username": "root",
 		"Password": "",
 		"Name": "indigo"

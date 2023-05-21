@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  app:
+    image: golang:1.20-alpine
+    command: sh -c "go get ./... && go run *.go"
+    ports:
+      - "80:80"
+    working_dir: /app
+    volumes:
+      - ./:/app
+  mariadb:
+    image: mariadb:10.11
+    volumes:
+      - ./structure.sql:/docker-entrypoint-initdb.d/structure.sql
+    environment:
+      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "1"
+      MARIADB_DATABASE: indigo
