@@ -12,7 +12,6 @@
 	<meta property="og:locale" content="en_US">
 	<meta property="og:title" content="{{.Title}}">
 	<meta property="og:type" content="article">
-	<meta property="og:url" content="https://indigo.group/">
 	<meta property="og:image" content="/assets/img/favicon.png">
 	<meta property="og:description" content="lmao idiot you got killed now you have to go use yiffverse or something">
 	<meta property="og:site_name" content="Indigo">
@@ -28,7 +27,7 @@
 				<div>
 					<img src="/assets/img/restricted.png">
 					<p>Your ability to use Indigo has been restricted due to violation(s) of the Indigo rules.</p>
-					<p>Ban expiration date: <strong>{{.Length}}</strong></p>
+					<p>Ban expiration date: <strong>{{.Length}}</strong>{{ if .LengthForever }} okay so basically forever{{ end }}</p>
 				</div>
 			</div>
 		</div>

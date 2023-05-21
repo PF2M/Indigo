@@ -1,13 +1,13 @@
--- MySQL dump 10.13  Distrib 5.7.24, for Linux (x86_64)
+-- MySQL dump 10.15  Distrib 10.0.38-MariaDB, for debian-linux-gnu (x86_64)
 --
 -- Host: localhost    Database: indigo
 -- ------------------------------------------------------
--- Server version	5.7.24-0ubuntu0.18.04.1
+-- Server version	10.0.38-MariaDB-0ubuntu0.16.04.1
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!40101 SET NAMES utf8 */;
+/*!40101 SET NAMES utf8mb4 */;
 /*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
 /*!40103 SET TIME_ZONE='+00:00' */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
@@ -35,6 +35,24 @@ CREATE TABLE `admin_notifications` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `audit_log_entries`
+--
+
+DROP TABLE IF EXISTS `audit_log_entries`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `audit_log_entries` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `type` tinyint(1) NOT NULL,
+  `context` int(11) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `created_by` (`created_by`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `bans`
 --
 
@@ -47,6 +65,7 @@ CREATE TABLE `bans` (
   `ip` varchar(42) NOT NULL,
   `cidr` tinyint(1) NOT NULL,
   `until` datetime NOT NULL,
+  `ban_by` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `bans_ibfk_1` (`user`),
   CONSTRAINT `bans_ibfk_1` FOREIGN KEY (`user`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -390,7 +409,10 @@ CREATE TABLE `notifications` (
   `merged` int(11) DEFAULT NULL,
   `notif_date` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `notif_read` tinyint(1) NOT NULL DEFAULT '0',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `notif_read` (`notif_read`),
+  KEY `merged` (`merged`),
+  KEY `notif_to` (`notif_to`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -630,4 +652,4 @@ CREATE TABLE `yeahs` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2018-11-09 15:08:24
+-- Dump completed on 2019-02-17 21:42:15

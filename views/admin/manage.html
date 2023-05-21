@@ -21,6 +21,7 @@
             <p style="margin:20px 10px 0px">Pip told me I shouldn't actually work on this until I have the actual essential features for Indigo done, so this is all you're getting for now. Sorry.</p>
             <form class="setting-form" method="post" action="/admin/manage/bantemp">
                 <input type="hidden" name="csrfmiddlewaretoken" value="{{.CurrentUser.CSRFToken}}">
+                <label class="note"><p><a href="/admin/audit_log">Click to view audit logs.</a></p></label>
                 <p class="settings-label">Ban User</p>
                 <input type="text" name="username" placeholder="Username">
                 <p><label class="note">Ban entire IP range: <input type="range" name="cidr" min="0" max="2" step="1"></label></p>

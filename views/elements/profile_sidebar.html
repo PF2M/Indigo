@@ -41,10 +41,12 @@
                     {{if eq .FriendStatus 1}}<button type="button" data-action="/users/{{.User.Username}}/friend_accept" data-screen-name="{{.User.Nickname}}" data-time="{{.RequestTime}}" data-msg="q" class="friend-button accept button symbol">Become friends</button>{{end}}
                     {{if eq .FriendStatus 2}}<button type="button" data-action="/users/{{.User.Username}}/friend_cancel" data-screen-name="{{.User.Nickname}}" class="friend-button unf cancel button symbol">Cancel friend request</button>{{end}}
                     {{if eq .FriendStatus 3}}<button type="button" data-action="/users/{{.User.Username}}/friend_delete" data-screen-name="{{.User.Nickname}}" class="friend-button unf delete button symbol">Friends</button>{{end}}
-                    <div class="report-buttons-content">
-                        <button type="button" class="report-button report-user" data-track-label="user" data-track-action="openReportModal" data-track-category="reportViolator" data-modal-open="#report-violator-page">Report Violation</button>
-                        <button type="button" class="report-button block-button {{if .User.Blocked}}unblock">Unblock{{else}}block">Block{{end}}</button>
-                    </div>
+                    {{if le .User.Level 0}}
+                        <div class="report-buttons-content">
+                            <button type="button" class="report-button report-user" data-track-label="user" data-track-action="openReportModal" data-track-category="reportViolator" data-modal-open="#report-violator-page">Report Violation</button>
+                            <button type="button" class="report-button block-button {{if .User.Blocked}}unblock">Unblock{{else}}block">Block{{end}}</button>
+                        </div>
+                    {{end}}
                 </div>
                 {{if eq .FriendStatus 0}}
                     <div class="dialog none" data-modal-types="post-friend-request">

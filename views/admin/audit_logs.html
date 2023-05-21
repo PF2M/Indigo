@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<style>
+		body {
+			background-color: #20262e;
+			color: white;
+			font-family: sans-serif;
+		}
+		a {
+			color: #3f8aff;
+		}
+		h1 {
+			margin: 0;
+			font-size: 128px;
+		}
+		img {
+			width: 50px;
+		}
+	</style>
+	<title></title>
+</head>
+<body>
+	{{if eq .Offset 0}}<p>arian was rushed to make this by the Indigo staff team, sorry it sucks so much</p>{{end}}
+	<form>
+		number to start at: <input type="number" name="offset" placeholder="offset" value="{{.Offset}}">
+		type: <select name="type">
+			<option value=""></option>
+			<option value="0"{{if eq .Type "0"}} selected{{ end }}>post delete</option>
+			<option value="1"{{if eq .Type "1"}} selected{{ end }}>comment delete</option>
+			<option value="2"{{if eq .Type "2"}} selected{{ end }}>ban</option>
+			<option value="3"{{if eq .Type "3"}} selected{{ end }}>unban</option>
+		</select>
+		username: <input type="text" name="username" placeholder="admin username" value="{{.User}}">
+		<button>go</button>
+	</form>
+	<ul>
+	{{range $entry := .AuditLogEntries}}
+		<li>
+			<a href="/users/{{$entry.CreatorUsername}}" title="{{$entry.CreatorNickname}}"><img src="{{$entry.CreatorFinalAva}}" title="{{$entry.CreatorNickname}}" alt="{{$entry.CreatorNickname}}"></a> <a href="/users/{{$entry.CreatorUsername}}">{{$entry.CreatorNickname}}</a> did <b><a href="{{$entry.TypeURI}}">{{$entry.TypeText}}</b> {{if or (not (eq $entry.Type 4)) (not (eq $entry.CreatorFinalAva $entry.TargetUserAvatar))}}<img src="{{$entry.TargetUserAvatar}}">{{end}}{{$entry.PostSummary}}</a>
+			| #{{$entry.ID}} {{$entry.CreatedAt}}
+		</li>
+	{{end}}
+	</ul>
+</body>
+</html>

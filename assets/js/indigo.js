@@ -3804,11 +3804,17 @@ function updateTime() {
             timestampText = Math.floor(since / 1000 / 60 / 60 / 24) + ' days ago';
         } else {
             var dateTime = new Date(parseInt(timestamp.attr('time')));
-            var mariosPrincessSex = dateTime.getHours() % 12;
-            if(mariosPrincessSex == 0) {
-                mariosPrincessSex = 12;
+            var twelveHourClockTime = dateTime.getHours() % 12;
+            if(twelveHourClockTime === 0) {
+                twelveHourClockTime = 12;
             }
-            timestampText = (dateTime.getMonth() + 1).toString().padStart(2, "0") + "/" + dateTime.getDate().toString().padStart(2, "0") + "/" + dateTime.getFullYear() + " " + mariosPrincessSex + ":" + dateTime.getMinutes().toString().padStart(2, "0") + " " + (dateTime.getHours() >= 12 ? "PM" : "AM");
+            timestampText = dateTime.getMonth().padStart(2, "0") + 1 + "/" +
+                dateTime.getDate().padStart(2, "0") + "/" +
+                dateTime.getFullYear() + " " +
+                twelveHourClockTime.toString().padStart(2, "0") + ":" +
+                dateTime.getMinutes().toString().padStart(2, "0") + " " +
+                (dateTime.getHours() >= 12 ? "PM" : "AM");
+
             timestamp.removeClass('update');
         }
         // only update the timestamp in the dom if it actually changed
@@ -3836,7 +3842,7 @@ function getNewFaviconBadge() {
 }
 getNewFaviconBadge();
 
-/*function ap() {
+/* function ap() {
 	if($('.adx').length) {
 		try {
   			(adsbygoogle = window.adsbygoogle || []).push({});
@@ -3849,4 +3855,4 @@ getNewFaviconBadge();
 }
 
 $(document).ready(ap);
-$(document).on('pjax:success', ap);*/
+$(document).on('pjax:success', ap); */

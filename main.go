@@ -81,7 +81,7 @@ var upgrader = websocket.Upgrader{
 }
 
 // Define the templates.
-var templates = template.Must(template.ParseFiles("views/auth/login.html", "views/auth/signup.html", "views/index.html", "views/elements/header.html", "views/elements/footer.html", "views/communities.html", "views/post.html", "views/comment.html", "views/elements/render_comment_preview.html", "views/elements/create_comment.html", "views/elements/profile_sidebar.html", "views/user.html", "views/user_list.html", "views/notifications.html", "views/user_posts.html", "views/elements/general_sidebar.html", "views/help/faq.html", "views/help/rules.html", "views/help/legal.html", "views/help/contact.html", "views/error.html", "views/friend_requests.html", "views/messages.html", "views/conversation.html", "views/elements/render_message.html", "views/activity_loading.html", "views/activity.html", "views/elements/render_post.html", "views/profile_settings.html", "views/search.html", "views/auth/ban.html", "views/all_communities.html", "views/blocked.html", "views/create_group.html", "views/auth/reset.html", "views/elements/render_user_post.html", "views/elements/render_comment.html", "views/all_comments.html", "views/elements/poll.html", "views/recent_communities.html", "views/admin/dashboard.html", "views/admin/manage.html", "views/admin/settings.html"))
+var templates = template.Must(template.ParseFiles("views/auth/login.html", "views/auth/signup.html", "views/index.html", "views/elements/header.html", "views/elements/footer.html", "views/communities.html", "views/post.html", "views/comment.html", "views/elements/render_comment_preview.html", "views/elements/create_comment.html", "views/elements/profile_sidebar.html", "views/user.html", "views/user_list.html", "views/notifications.html", "views/user_posts.html", "views/elements/general_sidebar.html", "views/help/faq.html", "views/help/rules.html", "views/help/legal.html", "views/help/contact.html", "views/error.html", "views/friend_requests.html", "views/messages.html", "views/conversation.html", "views/elements/render_message.html", "views/activity_loading.html", "views/activity.html", "views/elements/render_post.html", "views/profile_settings.html", "views/search.html", "views/auth/ban.html", "views/all_communities.html", "views/blocked.html", "views/create_group.html", "views/auth/reset.html", "views/elements/render_user_post.html", "views/elements/render_comment.html", "views/all_comments.html", "views/elements/poll.html", "views/recent_communities.html", "views/admin/dashboard.html", "views/admin/manage.html", "views/admin/settings.html", "views/admin/audit_logs.html"))
 
 // Redirect HTTP requests to HTTPS if properly configured.
 func redirect(w http.ResponseWriter, r *http.Request) {
@@ -280,6 +280,7 @@ func main() {
 	//r.HandleFunc("/admin/manage/{table}", showAdminManager).Methods("GET")
 	//r.HandleFunc("/admin/manage/{table}/{id:[0-9]+}", showAdminEditor).Methods("GET", "POST")
 	r.HandleFunc("/admin/settings", showAdminSettings).Methods("GET", "POST")
+	r.HandleFunc("/admin/audit_log", showAdminAuditLog).Methods("GET")
 
 	// Websocket route.
 	r.HandleFunc("/ws", handleConnections).Methods("GET")
@@ -289,6 +290,7 @@ func main() {
 
 	// Serve static assets.
 	r.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
+	// serve images as /images even though this can be changed
         r.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("images"))))
 
 	var handler http.Handler = r
@@ -345,6 +347,4 @@ func main() {
 			log.Fatal(http.ListenAndServe(settings.Port, nil))
 		}
 	}
-		
-	//}
 }

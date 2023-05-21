@@ -68,10 +68,10 @@ func doSession(w http.ResponseWriter, r *http.Request) (user, bool) {
 	} else {
 		indigoAuth, err := r.Cookie("indigo-auth")
 		if err == nil && len(indigoAuth.Value) > 0 {
-			var sexy string
-			db.QueryRow("SELECT username FROM login_tokens LEFT JOIN users ON user = users.id WHERE value = ?", &indigoAuth.Value).Scan(&sexy)
-			if len(sexy) > 0 {
-				currentUser = QueryUser(sexy, currentUser.Timezone)
+			var username string
+			db.QueryRow("SELECT username FROM login_tokens LEFT JOIN users ON user = users.id WHERE value = ?", &indigoAuth.Value).Scan(&username)
+			if len(username) > 0 {
+				currentUser = QueryUser(username, currentUser.Timezone)
 				if len(currentUser.Theme) > 0 {
 					currentUser.ThemeColors = strings.Split(currentUser.Theme, ",")
 				}
@@ -418,6 +418,7 @@ func showBan(w http.ResponseWriter, currentUser user, banLength time.Time) bool 
 		var data = map[string]interface{}{
 			"CurrentUser": currentUser,
 			"Length":      banLength.Format("01/02/2006 3:04 PM"),
+			"LengthForever": banLength.Year() > 2100,
 		}
 		err := templates.ExecuteTemplate(w, "ban.html", data)
 		if err != nil {
