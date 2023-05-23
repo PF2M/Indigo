@@ -19,7 +19,5 @@ Developers: [Ben](https://gitlab.com/benatpearl), [Triangles](https://oasis.100p
 Artwork: [Spicy](https://oasis.100percentnig.ga/users/mario7in1), [Inverse](https://oasis.100percentnig.ga/users/Inverse), [Gnarly](https://cvd-revived.gq/) (previously)
 
 Marketing: [Pip](https://github.com/Pikacraft64)
-
-Testing: [Mippy ❤️](https://indigo.cafe/users/Mario)
 ## Anything else?
 Not much yet, thanks for asking.
