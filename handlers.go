@@ -76,8 +76,8 @@ func requireLogin(handler func(http.ResponseWriter, *http.Request, user)) http.H
 		if len(CurrentUser.Username) == 0 {
 			redirectTo := "/login"
 			// only add callback if it's not on root otherwise that would be annoying
-			if(r.URL.Path != "/") {
-				redirectTo = redirectTo + "?callback="+url.QueryEscape(r.URL.Path)
+			if r.URL.Path != "/" {
+				redirectTo = redirectTo + "?callback=" + url.QueryEscape(r.URL.Path)
 			}
 			http.Redirect(w, r, redirectTo, 302)
 			return
@@ -2243,7 +2243,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	} else {
 		redirectTo = "/login?error=1"
 		if len(callback) != 0 {
-			redirectTo = redirectTo+"&callback="+callback
+			redirectTo = redirectTo + "&callback=" + callback
 		}
 	}
 	http.Redirect(w, r, redirectTo, 302)
@@ -5391,7 +5391,7 @@ func showUserComments(w http.ResponseWriter, r *http.Request, CurrentUser user) 
 	if err != nil {
 		offsetTime = time.Now().Unix()
 	}
-	
+
 	query := r.URL.Query().Get("q")
 	sidebar := setupProfileSidebar(user, CurrentUser, "comments")
 
