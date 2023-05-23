@@ -34,6 +34,7 @@
 		</select>
 		username: <input type="text" name="username" placeholder="admin username" value="{{.User}}">
 		<button>go</button>
+		<input type="hidden" name="offset_time" value="{{.OffsetTime}}">
 	</form>
 	<ul>
 	{{range $entry := .AuditLogEntries}}

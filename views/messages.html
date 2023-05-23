@@ -9,7 +9,7 @@
 		<div class="post-list-outline">
 			<h2 class="label">Messages<a href="/conversations/create"><button class="button msg-update">Create Group</button></a></h2>
 			<div class="list">
-				<ul class="list-content-with-icon-and-text arrow-list"{{if .Conversations}} data-next-page-url="/messages?offset={{.Offset}}"{{end}}>
+				<ul class="list-content-with-icon-and-text arrow-list"{{if .Conversations}} data-next-page-url="/messages?offset={{.Offset}}&offset_time={{.OffsetTime}}"{{end}}>
 					{{if .Conversations}}
                         {{$user_id := .CurrentUser.ID}}
                         {{range $conversation := .Conversations}}

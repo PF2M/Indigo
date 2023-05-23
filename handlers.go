@@ -4,6 +4,7 @@ package main
 
 import (
 	// Internals
+	"bufio"
 	"bytes"
 	"crypto/md5"
 	"crypto/tls"
@@ -39,17 +40,67 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Accept a friend request.
-func acceptFriendRequest(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
+// function handler with CurrentUser
+type UserResponseWriter struct {
+	http.ResponseWriter
+	CurrentUser user
+}
 
+// websocket doesn't work without this
+func (u *UserResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return u.ResponseWriter.(http.Hijacker).Hijack()
+}
+
+// just for good measure
+func (u *UserResponseWriter) Flush() {
+	u.ResponseWriter.(http.Flusher).Flush()
+}
+
+// Implement http.CloseNotifier
+func (u *UserResponseWriter) CloseNotify() <-chan bool {
+	return u.ResponseWriter.(http.CloseNotifier).CloseNotify()
+}
+
+// Implement http.Pusher (only if HTTP/2 server push is being used)
+func (u *UserResponseWriter) Push(target string, opts *http.PushOptions) error {
+	return u.ResponseWriter.(http.Pusher).Push(target, opts)
+}
+
+// redirect to login if the user is not logged in
+func requireLogin(handler func(http.ResponseWriter, *http.Request, user)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		CurrentUser, success := doSession(w, r)
+		if !success {
+			return
+		}
+		if len(CurrentUser.Username) == 0 {
+			redirectTo := "/login"
+			// only add callback if it's not on root otherwise that would be annoying
+			if(r.URL.Path != "/") {
+				redirectTo = redirectTo + "?callback="+url.QueryEscape(r.URL.Path)
+			}
+			http.Redirect(w, r, redirectTo, 302)
+			return
+		}
+		userResponseWriter := &UserResponseWriter{w, CurrentUser}
+		handler(userResponseWriter, r, CurrentUser)
+	}
+}
+
+// use the login if it's there
+func useLogin(handler func(http.ResponseWriter, *http.Request, user)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		CurrentUser, success := doSession(w, r)
+		if !success {
+			return
+		}
+		userResponseWriter := &UserResponseWriter{w, CurrentUser}
+		handler(userResponseWriter, r, CurrentUser)
+	}
+}
+
+// Accept a friend request.
+func acceptFriendRequest(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	username := vars["username"]
 	var user_id int
@@ -64,7 +115,7 @@ func acceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = db.QueryRow("SELECT COUNT(*) FROM friend_requests WHERE request_by = ? AND request_to = ?", user_id, currentUser.ID).Scan(&requested)
+	err = db.QueryRow("SELECT COUNT(*) FROM friend_requests WHERE request_by = ? AND request_to = ?", user_id, CurrentUser.ID).Scan(&requested)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -79,18 +130,18 @@ func acceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&user_id, &currentUser.ID)
+	stmt.Exec(&user_id, &CurrentUser.ID)
 	stmt.Close()
 
 	var conversation_id int
-	err = db.QueryRow("SELECT id FROM conversations WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)", user_id, currentUser.ID, currentUser.ID, user_id).Scan(&conversation_id)
+	err = db.QueryRow("SELECT id FROM conversations WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)", user_id, CurrentUser.ID, CurrentUser.ID, user_id).Scan(&conversation_id)
 	if conversation_id == 0 {
 		stmt, err = db.Prepare("INSERT INTO conversations (source, target) SELECT ?, ? FROM dual WHERE NOT EXISTS (SELECT 1 FROM conversations WHERE (source = ? AND target = ?) OR (source = ? AND target = ?))")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		stmt.Exec(&user_id, &currentUser.ID, &user_id, &currentUser.ID, &currentUser.ID, &user_id)
+		stmt.Exec(&user_id, &CurrentUser.ID, &user_id, &CurrentUser.ID, &CurrentUser.ID, &user_id)
 		stmt.Close()
 	} else {
 		stmt, err = db.Prepare("UPDATE conversations SET is_rm = 0 WHERE id = ?")
@@ -107,20 +158,12 @@ func acceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&user_id, &currentUser.ID)
+	stmt.Exec(&user_id, &CurrentUser.ID)
 	stmt.Close()
 }
 
 // Give a favorite to a community.
-func addCommunityFavorite(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
-
+func addCommunityFavorite(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	community_id := vars["id"]
 
@@ -131,7 +174,7 @@ func addCommunityFavorite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if communityExists == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
@@ -140,21 +183,13 @@ func addCommunityFavorite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&community_id, &currentUser.ID)
+	stmt.Exec(&community_id, &CurrentUser.ID)
 	stmt.Close()
 }
 
 // Ban a user.
-func adminBanUser(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-	if currentUser.Level < admin.Manage.MinimumLevel {
+func adminBanUser(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	if CurrentUser.Level < admin.Manage.MinimumLevel {
 		http.Redirect(w, r, "/", 302)
 		return
 	}
@@ -176,7 +211,7 @@ func adminBanUser(w http.ResponseWriter, r *http.Request) {
 		ip = getCIDR(ip, cidr)
 	}
 	fmt.Println(length)
-	_, err = db.Exec("REPLACE INTO bans (user, ip, cidr, until, ban_by) VALUES (?, ?, ?, NOW() + INTERVAL ? DAY, ?)", userID, ip, cidr, length, currentUser.ID)
+	_, err = db.Exec("REPLACE INTO bans (user, ip, cidr, until, ban_by) VALUES (?, ?, ?, NOW() + INTERVAL ? DAY, ?)", userID, ip, cidr, length, CurrentUser.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -197,20 +232,12 @@ func adminBanUser(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Success!"))
 	// audit log
 	// type 2 - ban user
-	db.Exec("INSERT INTO audit_log_entries(type, context, created_by) values(2, ?, ?)", userID, currentUser.ID)
+	db.Exec("INSERT INTO audit_log_entries(type, context, created_by) values(2, ?, ?)", userID, CurrentUser.ID)
 }
 
 // Unban a user.
-func adminUnbanUser(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-	if currentUser.Level < admin.Manage.MinimumLevel {
+func adminUnbanUser(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	if CurrentUser.Level < admin.Manage.MinimumLevel {
 		http.Redirect(w, r, "/", 302)
 		return
 	}
@@ -229,31 +256,22 @@ func adminUnbanUser(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Success!"))
 	// audit log
 	// type 3 - unban user
-	db.Exec("INSERT INTO audit_log_entries(type, context, created_by) values(3, ?, ?)", userID, currentUser.ID)
+	db.Exec("INSERT INTO audit_log_entries(type, context, created_by) values(3, ?, ?)", userID, CurrentUser.ID)
 }
 
 // Block a user.
-func blockUser(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func blockUser(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 
 	username := vars["username"]
 
-	if username != currentUser.Username {
+	if username != CurrentUser.Username {
 		var user_id int
 		var usern string
 		var level int
 		db.QueryRow("SELECT id, username, level FROM users WHERE username = ?", username).Scan(&user_id, &usern, &level)
 		if len(usern) == 0 {
-			handle404(w, r)
+			handle404(w, r, CurrentUser)
 			return
 		}
 		if level > 0 {
@@ -264,7 +282,7 @@ func blockUser(w http.ResponseWriter, r *http.Request) {
 		stmt, err := db.Prepare("INSERT blocks SET source = ?, target = ?")
 		if err == nil {
 			// If there's no errors, we can go ahead and execute the statement.
-			_, err := stmt.Exec(&currentUser.ID, &user_id)
+			_, err := stmt.Exec(&CurrentUser.ID, &user_id)
 			stmt.Close()
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -276,7 +294,7 @@ func blockUser(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			stmt.Exec(&user_id, &currentUser.ID, &currentUser.ID, &user_id)
+			stmt.Exec(&user_id, &CurrentUser.ID, &CurrentUser.ID, &user_id)
 			stmt.Close()
 
 			stmt, err = db.Prepare("UPDATE conversations SET is_rm = 1 WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)")
@@ -284,7 +302,7 @@ func blockUser(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			stmt.Exec(&user_id, &currentUser.ID, &currentUser.ID, &user_id)
+			stmt.Exec(&user_id, &CurrentUser.ID, &CurrentUser.ID, &user_id)
 			stmt.Close()
 
 			stmt, err = db.Prepare("DELETE FROM follows WHERE (follow_to = ? AND follow_by = ?) OR (follow_to = ? AND follow_by = ?)")
@@ -292,12 +310,12 @@ func blockUser(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			stmt.Exec(&user_id, &currentUser.ID, &currentUser.ID, &user_id)
+			stmt.Exec(&user_id, &CurrentUser.ID, &CurrentUser.ID, &user_id)
 			stmt.Close()
 
 			var msg wsMessage
 			msg.Type = "block"
-			msg.Content = currentUser.Username
+			msg.Content = CurrentUser.Username
 			for client := range clients {
 				if clients[client].UserID == user_id {
 					err := writeWs(clients[client], client, msg)
@@ -312,16 +330,7 @@ func blockUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // Cancel a friend request.
-func cancelFriendRequest(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func cancelFriendRequest(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	username := vars["username"]
 	var user_id int
@@ -341,24 +350,15 @@ func cancelFriendRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&currentUser.ID, &user_id)
+	stmt.Exec(&CurrentUser.ID, &user_id)
 	stmt.Close()
 }
 
 // the handler for comment creation
-func createComment(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func createComment(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	post_id := vars["id"]
-	user_id := currentUser.ID
+	user_id := CurrentUser.ID
 	post_type := r.FormValue("post_type")
 	body := r.FormValue("body")
 	painting := r.FormValue("painting")
@@ -376,8 +376,8 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 	var post_by int
 	var recent_comment int
 	db.QueryRow("SELECT created_by FROM posts WHERE id = ?", post_id).Scan(&post_by)
-	if currentUser.ID != post_by {
-		db.QueryRow("SELECT COUNT(*) FROM comments WHERE created_by = ? AND created_at > DATE_SUB(NOW(), INTERVAL 10 SECOND)", currentUser.ID).Scan(&recent_comment)
+	if CurrentUser.ID != post_by {
+		db.QueryRow("SELECT COUNT(*) FROM comments WHERE created_by = ? AND created_at > DATE_SUB(NOW(), INTERVAL 10 SECOND)", CurrentUser.ID).Scan(&recent_comment)
 		if recent_comment > 0 {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
@@ -453,7 +453,7 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "That post does not exist.", http.StatusBadRequest)
 		return
 	}
-	if checkIfEitherBlocked(postedBy, currentUser.ID) && currentUser.Level == 0 {
+	if checkIfEitherBlocked(postedBy, CurrentUser.ID) && CurrentUser.Level == 0 {
 		http.Error(w, "You're not allowed to do that.", http.StatusForbidden)
 		return
 	}
@@ -461,7 +461,7 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 	stmt, err := db.Prepare("INSERT comments SET created_by = ?, post = ?, body = ?, image = ?, attachment_type = ?, url = ?, url_type = ?, is_spoiler = ?, post_type = ?, feeling = ?")
 	if err == nil {
 		// If there's no errors, we can go ahead and execute the statement.
-		_, err := stmt.Exec(currentUser.ID, post_id, body, image, attachment_type, url, url_type, is_spoiler, post_type, feeling)
+		_, err := stmt.Exec(CurrentUser.ID, post_id, body, image, attachment_type, url, url_type, is_spoiler, post_type, feeling)
 		stmt.Close()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -472,14 +472,14 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 		var timestamp time.Time
 		var role int
 
-		db.QueryRow("SELECT comments.id, created_by, created_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, username, nickname, avatar, has_mh, online, hide_online, color, role FROM comments LEFT JOIN users ON users.id = created_by WHERE created_by = ? ORDER BY created_at DESC LIMIT 1", currentUser.ID).Scan(&comments.ID, &comments.CreatedBy, &timestamp, &comments.Feeling, &comments.BodyText, &comments.Image, &comments.AttachmentType, &comments.IsSpoiler, &comments.PostType, &comments.URL, &comments.URLType, &comments.CommenterUsername, &comments.CommenterNickname, &comments.CommenterIcon, &comments.CommenterHasMii, &comments.CommenterOnline, &comments.CommenterHideOnline, &comments.CommenterColor, &role)
+		db.QueryRow("SELECT comments.id, created_by, created_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, username, nickname, avatar, has_mh, online, hide_online, color, role FROM comments LEFT JOIN users ON users.id = created_by WHERE created_by = ? ORDER BY created_at DESC LIMIT 1", CurrentUser.ID).Scan(&comments.ID, &comments.CreatedBy, &timestamp, &comments.Feeling, &comments.BodyText, &comments.Image, &comments.AttachmentType, &comments.IsSpoiler, &comments.PostType, &comments.URL, &comments.URLType, &comments.CommenterUsername, &comments.CommenterNickname, &comments.CommenterIcon, &comments.CommenterHasMii, &comments.CommenterOnline, &comments.CommenterHideOnline, &comments.CommenterColor, &role)
 
 		comments.CommenterIcon = getAvatar(comments.CommenterIcon, comments.CommenterHasMii, comments.Feeling)
 		if role > 0 {
 			comments.CommenterRoleImage = getRoleImage(role)
 		}
 
-		comments.CreatedAt = humanTiming(timestamp, currentUser.Timezone)
+		comments.CreatedAt = humanTiming(timestamp, CurrentUser.Timezone)
 		comments.CreatedAtUnix = timestamp.Unix()
 		comments.Body = parseBody(comments.BodyText, false, true)
 
@@ -489,7 +489,7 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 			"Comment": comments,
 		}
 
-		data["ByMe"] = currentUser.ID == post_by
+		data["ByMe"] = CurrentUser.ID == post_by
 		if data["ByMe"] == true {
 			notif_getcomments, _ := db.Query("SELECT created_by FROM comments WHERE post = ? AND created_by != ? AND is_rm = 0 GROUP BY created_by", &post_id, &user_id)
 			var notif_comment_by int
@@ -497,11 +497,11 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 			for notif_getcomments.Next() {
 				notif_getcomments.Scan(&notif_comment_by)
 
-				createNotif(notif_comment_by, 3, post_id, currentUser.ID)
+				createNotif(notif_comment_by, 3, post_id, CurrentUser.ID)
 			}
 			notif_getcomments.Close()
 		} else {
-			createNotif(post_by, 2, post_id, currentUser.ID)
+			createNotif(post_by, 2, post_id, CurrentUser.ID)
 		}
 
 		err = templates.ExecuteTemplate(w, "create_comment.html", data)
@@ -553,20 +553,11 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 }
 
 // Give a Yeah to a comment.
-func createCommentYeah(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func createCommentYeah(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 
 	comment_id := vars["id"]
-	user_id := currentUser.ID
+	user_id := CurrentUser.ID
 
 	var comment_by int
 	var post_id string
@@ -582,7 +573,7 @@ func createCommentYeah(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if checkIfCanYeah(currentUser, comment_by) {
+		if checkIfCanYeah(CurrentUser, comment_by) {
 			stmt, err := db.Prepare("INSERT yeahs SET yeah_post = ?, yeah_by = ?, on_comment = 1")
 			if err == nil {
 				// If there's no errors, we can go ahead and execute the statement.
@@ -602,8 +593,8 @@ func createCommentYeah(w http.ResponseWriter, r *http.Request) {
 					msg.Type = "commentYeah"
 					msg.ID = comment_id
 					roleImageHTML := "\">"
-					if len(currentUser.Role.Image) > 0 {
-						roleImageHTML = fmt.Sprintf(" official-user\"><img src=\"%s\" class=\"official-tag\">", html.EscapeString(currentUser.Role.Image))
+					if len(CurrentUser.Role.Image) > 0 {
+						roleImageHTML = fmt.Sprintf(" official-user\"><img src=\"%s\" class=\"official-tag\">", html.EscapeString(CurrentUser.Role.Image))
 					}
 					// "I don't think we need a separate template for such a small amount of HTML." -the person who originally wrote this function
 					msg.Content = fmt.Sprintf("<a href=\"/users/%s\" id=\"%d\" class=\"post-permalink-feeling-icon%s<img src=\"%s\" class=\"user-icon\"></a>", yeahs.Username, yeahs.ID, roleImageHTML, getAvatar(yeahs.Avatar, yeahs.HasMii, feeling))
@@ -624,31 +615,22 @@ func createCommentYeah(w http.ResponseWriter, r *http.Request) {
 }
 
 // Follow a user.
-func createFollow(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func createFollow(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 
 	username := vars["username"]
-	current_username := currentUser.Username
+	current_username := CurrentUser.Username
 
 	if username != current_username {
 		var user_id int
 		var usern string
 		db.QueryRow("SELECT id, username FROM users WHERE username = ?", username).Scan(&user_id, &usern)
 		if len(usern) == 0 {
-			handle404(w, r)
+			handle404(w, r, CurrentUser)
 			return
 		}
 
-		if checkIfEitherBlocked(user_id, currentUser.ID) && currentUser.Level == 0 {
+		if checkIfEitherBlocked(user_id, CurrentUser.ID) && CurrentUser.Level == 0 {
 			http.Error(w, "You're not allowed to do that.", http.StatusBadRequest)
 			return
 		}
@@ -656,14 +638,14 @@ func createFollow(w http.ResponseWriter, r *http.Request) {
 		stmt, err := db.Prepare("INSERT follows SET follow_to = ?, follow_by = ?")
 		if err == nil {
 			// If there's no errors, we can go ahead and execute the statement.
-			_, err := stmt.Exec(&user_id, &currentUser.ID)
+			_, err := stmt.Exec(&user_id, &CurrentUser.ID)
 			stmt.Close()
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 
-			createNotif(user_id, 4, "", currentUser.ID)
+			createNotif(user_id, 4, "", CurrentUser.ID)
 
 			// This is necessary for the Miiverse client-side scripts.
 			w.Header().Add("Content-Type", "application/json")
@@ -686,16 +668,7 @@ func createFollow(w http.ResponseWriter, r *http.Request) {
 }
 
 // Create a group chat.
-func createGroupChat(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func createGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	var users []int
 	for i := 1; i <= 10; i++ {
 		username := r.FormValue("user" + strconv.Itoa(i))
@@ -709,14 +682,14 @@ func createGroupChat(w http.ResponseWriter, r *http.Request) {
 			}
 			if group_permissions == 1 {
 				var followCount int
-				db.QueryRow("SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = ?", currentUser.ID, id).Scan(&followCount)
+				db.QueryRow("SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = ?", CurrentUser.ID, id).Scan(&followCount)
 				if followCount == 0 {
 					http.Error(w, "The user "+username+" does not allow you to add them to chat groups.", http.StatusBadRequest)
 					return
 				}
 			}
 			var friendCount int
-			db.QueryRow("SELECT COUNT(*) FROM friendships WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)", id, currentUser.ID, currentUser.ID, id).Scan(&friendCount)
+			db.QueryRow("SELECT COUNT(*) FROM friendships WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)", id, CurrentUser.ID, CurrentUser.ID, id).Scan(&friendCount)
 			if friendCount == 0 {
 				http.Error(w, "The user "+username+" is not on your friend list.", http.StatusBadRequest)
 				return
@@ -725,17 +698,17 @@ func createGroupChat(w http.ResponseWriter, r *http.Request) {
 			users = append(users, id)
 		}
 	}
-	users = append(users, currentUser.ID)
+	users = append(users, CurrentUser.ID)
 
 	stmt, err := db.Prepare("INSERT INTO conversations (source, target) VALUES (?, 0)")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&currentUser.ID)
+	stmt.Exec(&CurrentUser.ID)
 	stmt.Close()
 	var conversationID int
-	db.QueryRow("SELECT id FROM conversations WHERE source = ? AND target = 0 ORDER BY id DESC", currentUser.ID).Scan(&conversationID)
+	db.QueryRow("SELECT id FROM conversations WHERE source = ? AND target = 0 ORDER BY id DESC", CurrentUser.ID).Scan(&conversationID)
 	for _, user := range users {
 		stmt, err = db.Prepare("INSERT INTO group_members (user, conversation) VALUES (?, ?)")
 		if err != nil {
@@ -750,17 +723,8 @@ func createGroupChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // Create a post.
-func createPost(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
-	user_id := currentUser.ID
+func createPost(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	user_id := CurrentUser.ID
 	community_id := r.FormValue("community")
 	post_type := r.FormValue("post_type")
 	body := r.FormValue("body")
@@ -793,7 +757,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var communityCount int
-	err = db.QueryRow("SELECT COUNT(*) FROM communities WHERE id = ? AND (rm = 0 OR id = 0) AND permissions <= ? LIMIT 1", community_id, currentUser.Level).Scan(&communityCount)
+	err = db.QueryRow("SELECT COUNT(*) FROM communities WHERE id = ? AND (rm = 0 OR id = 0) AND permissions <= ? LIMIT 1", community_id, CurrentUser.Level).Scan(&communityCount)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -832,7 +796,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		repost = "0"
 	} else {
 		var count int
-		err = db.QueryRow("SELECT COUNT(*) FROM posts LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND is_rm_by_admin = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) LIMIT 1", repost, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID).Scan(&count)
+		err = db.QueryRow("SELECT COUNT(*) FROM posts LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND is_rm_by_admin = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) LIMIT 1", repost, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID).Scan(&count)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -931,25 +895,25 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			posts.Poll = getPoll(posts.ID, currentUser.ID)
+			posts.Poll = getPoll(posts.ID, CurrentUser.ID)
 		}
 
 		posts.PosterIcon = getAvatar(posts.PosterIcon, posts.PosterHasMii, posts.Feeling)
 		if role > 0 {
 			posts.PosterRoleImage = getRoleImage(role)
 		}
-		posts.CreatedAt = humanTiming(timestamp, currentUser.Timezone)
+		posts.CreatedAt = humanTiming(timestamp, CurrentUser.Timezone)
 		posts.CreatedAtUnix = timestamp.Unix()
 		posts.Body = parseBodyWithLineBreaks(posts.BodyText, true, true)
 		posts.ByMe = true
 		posts.CanYeah = true // temporary!
 		if posts.RepostID > 0 {
 			var repost post
-			db.QueryRow("SELECT posts.id, created_by, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, is_rm_by_admin, communities.id, title, icon, rm, username, nickname, avatar, has_mh, online, hide_online, color, role FROM posts LEFT JOIN communities ON communities.id = community_id LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND is_rm_by_admin = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) LIMIT 1", posts.RepostID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID).Scan(&repost.ID, &repost.CreatedBy, &repost.CreatedAtTime, &repost.EditedAtTime, &repost.Feeling, &repost.BodyText, &repost.Image, &repost.AttachmentType, &repost.IsSpoiler, &repost.PostType, &repost.URL, &repost.URLType, &repost.Pinned, &repost.Privacy, &repost.RepostID, &repost.MigrationID, &repost.MigratedID, &repost.MigratedCommunity, &repost.IsRMByAdmin, &repost.CommunityID, &repost.CommunityName, &repost.CommunityIcon, &repost.CommunityRM, &repost.PosterUsername, &repost.PosterNickname, &repost.PosterIcon, &repost.PosterHasMii, &repost.PosterOnline, &repost.PosterHideOnline, &repost.PosterColor, &repost.PosterRoleID)
+			db.QueryRow("SELECT posts.id, created_by, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, is_rm_by_admin, communities.id, title, icon, rm, username, nickname, avatar, has_mh, online, hide_online, color, role FROM posts LEFT JOIN communities ON communities.id = community_id LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND is_rm_by_admin = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) LIMIT 1", posts.RepostID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID).Scan(&repost.ID, &repost.CreatedBy, &repost.CreatedAtTime, &repost.EditedAtTime, &repost.Feeling, &repost.BodyText, &repost.Image, &repost.AttachmentType, &repost.IsSpoiler, &repost.PostType, &repost.URL, &repost.URLType, &repost.Pinned, &repost.Privacy, &repost.RepostID, &repost.MigrationID, &repost.MigratedID, &repost.MigratedCommunity, &repost.IsRMByAdmin, &repost.CommunityID, &repost.CommunityName, &repost.CommunityIcon, &repost.CommunityRM, &repost.PosterUsername, &repost.PosterNickname, &repost.PosterIcon, &repost.PosterHasMii, &repost.PosterOnline, &repost.PosterHideOnline, &repost.PosterColor, &repost.PosterRoleID)
 			posts.Repost = &repost
 			posts.Repost.Type = 3
 			if len(posts.Repost.CommunityName) > 0 {
-				posts.Repost = setupPost(posts.Repost, currentUser, 3, 0)
+				posts.Repost = setupPost(posts.Repost, CurrentUser, 3, 0)
 			}
 		}
 
@@ -964,8 +928,8 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		posts.Type = 1
 		templates.ExecuteTemplate(&UserPostTpl, "render_post.html", posts)
 
-		if repost != "0" && posts.Repost.CreatedBy != currentUser.ID {
-			createNotif(posts.Repost.CreatedBy, 7, strconv.Itoa(posts.ID), currentUser.ID)
+		if repost != "0" && posts.Repost.CreatedBy != CurrentUser.ID {
+			createNotif(posts.Repost.CreatedBy, 7, strconv.Itoa(posts.ID), CurrentUser.ID)
 		}
 
 		var msg wsMessage
@@ -987,7 +951,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 					client.Close()
 					delete(clients, client)
 				}
-			} else if clients[client].OnPage == "/users/"+currentUser.Username+"/posts" && (!checkIfEitherBlocked(clients[client].UserID, posts.CreatedBy) || clients[client].Level > 0) && !inForbiddenKeywords(body, clients[client].UserID) && (posts.Privacy == 0) {
+			} else if clients[client].OnPage == "/users/"+CurrentUser.Username+"/posts" && (!checkIfEitherBlocked(clients[client].UserID, posts.CreatedBy) || clients[client].Level > 0) && !inForbiddenKeywords(body, clients[client].UserID) && (posts.Privacy == 0) {
 				msg.Content = UserPostTpl.String()
 				err := writeWs(clients[client], client, msg)
 				if err != nil {
@@ -1003,20 +967,11 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 }
 
 // Give a Yeah to a post.
-func createPostYeah(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func createPostYeah(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 
 	post_id := vars["id"]
-	user_id := currentUser.ID
+	user_id := CurrentUser.ID
 
 	var post_by int
 	var community_id string
@@ -1033,7 +988,7 @@ func createPostYeah(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if checkIfCanYeah(currentUser, post_by) {
+		if checkIfCanYeah(CurrentUser, post_by) {
 			stmt, err := db.Prepare("INSERT yeahs SET yeah_post = ?, yeah_by = ?, on_comment = 0")
 			if err == nil {
 				// If there's no errors, we can go ahead and execute the statement.
@@ -1052,8 +1007,8 @@ func createPostYeah(w http.ResponseWriter, r *http.Request) {
 					msg.Type = "postYeah"
 					msg.ID = post_id
 					roleImageHTML := "\">"
-					if len(currentUser.Role.Image) > 0 {
-						roleImageHTML = fmt.Sprintf(" official-user\"><img src=\"%s\" class=\"official-tag\">", html.EscapeString(currentUser.Role.Image))
+					if len(CurrentUser.Role.Image) > 0 {
+						roleImageHTML = fmt.Sprintf(" official-user\"><img src=\"%s\" class=\"official-tag\">", html.EscapeString(CurrentUser.Role.Image))
 					}
 					// "I don't think we need a separate template for such a small amount of HTML." -whoever originally wrote this function
 					msg.Content = fmt.Sprintf("<a href=\"/users/%s\" id=\"%d\" class=\"post-permalink-feeling-icon%s<img src=\"%s\" class=\"user-icon\"></a>", yeahs.Username, yeahs.ID, roleImageHTML, getAvatar(yeahs.Avatar, yeahs.HasMii, feeling))
@@ -1074,16 +1029,7 @@ func createPostYeah(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete comments.
-func deleteComment(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func deleteComment(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	comment_id := vars["id"]
 
@@ -1091,21 +1037,21 @@ func deleteComment(w http.ResponseWriter, r *http.Request) {
 	commentID := -1
 	db.QueryRow("SELECT created_by, post FROM comments WHERE id = ?", comment_id).Scan(&created_by, &commentID)
 	if created_by == -1 || commentID == -1 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
-	if created_by != currentUser.ID {
+	if created_by != CurrentUser.ID {
 		var otherUserLevel int
 		db.QueryRow("SELECT level FROM users WHERE id = ?", created_by).Scan(&otherUserLevel)
-		if otherUserLevel > currentUser.Level || currentUser.Level == 0 {
+		if otherUserLevel > CurrentUser.Level || CurrentUser.Level == 0 {
 			http.Error(w, "You do not have permission to delete this comment.", http.StatusForbidden)
 			return
 		}
 		_, err = db.Exec("UPDATE comments SET is_rm_by_admin = 1 WHERE id = ?", comment_id)
 		// audit log
 		// type 1 - delete comment
-		db.Exec("INSERT INTO audit_log_entries(type, context, created_by) values(1, ?, ?)", comment_id, currentUser.ID)
+		db.Exec("INSERT INTO audit_log_entries(type, context, created_by) values(1, ?, ?)", comment_id, CurrentUser.ID)
 	} else {
 		_, err = db.Exec("UPDATE comments SET is_rm = 1 WHERE id = ?", comment_id)
 	}
@@ -1120,7 +1066,7 @@ func deleteComment(w http.ResponseWriter, r *http.Request) {
 	for client := range clients {
 		if clients[client].OnPage == "/posts/"+strconv.Itoa(commentID) {
 			msg.Type = "delete"
-		} else if clients[client].OnPage == "/comments/"+comment_id && clients[client].UserID != currentUser.ID {
+		} else if clients[client].OnPage == "/comments/"+comment_id && clients[client].UserID != CurrentUser.ID {
 			msg.Type = "refresh"
 		} else {
 			continue
@@ -1134,22 +1080,13 @@ func deleteComment(w http.ResponseWriter, r *http.Request) {
 }
 
 // Unyeah a comment.
-func deleteCommentYeah(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func deleteCommentYeah(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 
 	var yeah_id string
 	var post_id string
 	comment_id := vars["id"]
-	user_id := currentUser.ID
+	user_id := CurrentUser.ID
 
 	db.QueryRow("SELECT yeahs.id, comments.post FROM yeahs INNER JOIN comments ON comments.id = yeahs.yeah_post WHERE yeah_post = ? AND yeah_by = ? AND on_comment = 1", comment_id, user_id).Scan(&yeah_id, &post_id)
 
@@ -1176,16 +1113,7 @@ func deleteCommentYeah(w http.ResponseWriter, r *http.Request) {
 }
 
 // Remove a favorite from a community.
-func deleteCommunityFavorite(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func deleteCommunityFavorite(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	community_id := vars["id"]
 
@@ -1196,7 +1124,7 @@ func deleteCommunityFavorite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if communityExists == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
@@ -1205,21 +1133,12 @@ func deleteCommunityFavorite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&community_id, &currentUser.ID)
+	stmt.Exec(&community_id, &CurrentUser.ID)
 	stmt.Close()
 }
 
 // Unfollow a user.
-func deleteFollow(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func deleteFollow(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 
 	username := vars["username"]
@@ -1227,12 +1146,12 @@ func deleteFollow(w http.ResponseWriter, r *http.Request) {
 	var usern string
 	db.QueryRow("SELECT id, username FROM users WHERE username = ?", username).Scan(&user_id, &usern)
 	if len(usern) == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
 	stmt, _ := db.Prepare("DELETE FROM follows WHERE follow_to = ? AND follow_by = ?")
-	stmt.Exec(&user_id, &currentUser.ID)
+	stmt.Exec(&user_id, &CurrentUser.ID)
 	stmt.Close()
 
 	var msg wsMessage
@@ -1250,16 +1169,7 @@ func deleteFollow(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete a friend.
-func deleteFriend(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func deleteFriend(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	username := vars["username"]
 	var user_id int
@@ -1279,7 +1189,7 @@ func deleteFriend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&user_id, &currentUser.ID, &currentUser.ID, &user_id)
+	stmt.Exec(&user_id, &CurrentUser.ID, &CurrentUser.ID, &user_id)
 	stmt.Close()
 
 	stmt, err = db.Prepare("UPDATE conversations SET is_rm = 1 WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)")
@@ -1287,22 +1197,13 @@ func deleteFriend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&user_id, &currentUser.ID, &currentUser.ID, &user_id)
+	stmt.Exec(&user_id, &CurrentUser.ID, &CurrentUser.ID, &user_id)
 	stmt.Close()
 }
 
 // Delete a group chat.
-func deleteGroupChat(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
-	// No need to validate any of this since you can't fake a currentUser.
+func deleteGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	// No need to validate any of this since you can't fake a CurrentUser.
 	vars := mux.Vars(r)
 	conversationID := vars["id"]
 	stmt, err := db.Prepare("DELETE FROM conversations WHERE id = ? AND source = ? AND target = 0")
@@ -1310,28 +1211,19 @@ func deleteGroupChat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&conversationID, currentUser.ID)
+	stmt.Exec(&conversationID, CurrentUser.ID)
 	stmt.Close()
 
 	http.Redirect(w, r, "/messages", 302)
 }
 
 // Delete a message.
-func deleteMessage(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func deleteMessage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	message_id := vars["id"]
 
 	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM messages WHERE id = ? AND created_by = ?", message_id, currentUser.ID).Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM messages WHERE id = ? AND created_by = ?", message_id, CurrentUser.ID).Scan(&count)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1356,7 +1248,7 @@ func deleteMessage(w http.ResponseWriter, r *http.Request) {
 	// Get the conversation ID and the username of the user on the other end (if it's not a group chat) for websockets.
 	var conversationID string
 	var otherUserID int
-	err = db.QueryRow("SELECT conversations.id, IF(source = ?, source, target) FROM conversations LEFT JOIN messages ON conversation_id = conversations.id WHERE messages.id = ?", currentUser.ID, message_id).Scan(&conversationID, &otherUserID)
+	err = db.QueryRow("SELECT conversations.id, IF(source = ?, source, target) FROM conversations LEFT JOIN messages ON conversation_id = conversations.id WHERE messages.id = ?", CurrentUser.ID, message_id).Scan(&conversationID, &otherUserID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1365,7 +1257,7 @@ func deleteMessage(w http.ResponseWriter, r *http.Request) {
 	msg.ID = message_id
 	for client := range clients {
 		if otherUserID > 0 {
-			if clients[client].OnPage == "/messages/"+url.PathEscape(currentUser.Username) && clients[client].UserID == otherUserID {
+			if clients[client].OnPage == "/messages/"+url.PathEscape(CurrentUser.Username) && clients[client].UserID == otherUserID {
 				msg.Type = "delete"
 			} else {
 				continue
@@ -1390,16 +1282,7 @@ func deleteMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete a post.
-func deletePost(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func deletePost(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	post_id := vars["id"]
 
@@ -1407,13 +1290,13 @@ func deletePost(w http.ResponseWriter, r *http.Request) {
 	community_id := -1
 	db.QueryRow("SELECT created_by, community_id FROM posts WHERE id = ?", post_id).Scan(&created_by, &community_id)
 	if community_id == -1 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
-	if created_by != currentUser.ID {
+	if created_by != CurrentUser.ID {
 		var otherUserLevel int
 		db.QueryRow("SELECT level FROM users WHERE id = ?", created_by).Scan(&otherUserLevel)
-		if otherUserLevel > currentUser.Level || currentUser.Level == 0 {
+		if otherUserLevel > CurrentUser.Level || CurrentUser.Level == 0 {
 			http.Error(w, "You do not have permission to delete this post.", http.StatusForbidden)
 			return
 		}
@@ -1426,7 +1309,7 @@ func deletePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if created_by != currentUser.ID {
+	if created_by != CurrentUser.ID {
 		reason := -1
 		db.QueryRow("SELECT reason FROM reports WHERE pid = ? AND type = 0 ORDER BY COUNT(reason) DESC LIMIT 1", post_id).Scan(&reason)
 		if reason != -1 {
@@ -1443,7 +1326,7 @@ func deletePost(w http.ResponseWriter, r *http.Request) {
 		}
 		// audit log
 		// type 0 - delete post
-		db.Exec("INSERT INTO audit_log_entries(type, context, created_by) values(0, ?, ?)", post_id, currentUser.ID)
+		db.Exec("INSERT INTO audit_log_entries(type, context, created_by) values(0, ?, ?)", post_id, CurrentUser.ID)
 	}
 	db.Exec("DELETE FROM reports WHERE pid = ? AND type = 0", post_id)
 
@@ -1452,7 +1335,7 @@ func deletePost(w http.ResponseWriter, r *http.Request) {
 	for client := range clients {
 		if clients[client].OnPage == "/communities/"+strconv.Itoa(community_id) {
 			msg.Type = "delete"
-		} else if clients[client].OnPage == "/posts/"+post_id && clients[client].UserID != currentUser.ID {
+		} else if clients[client].OnPage == "/posts/"+post_id && clients[client].UserID != CurrentUser.ID {
 			msg.Type = "refresh"
 		} else {
 			continue
@@ -1466,22 +1349,13 @@ func deletePost(w http.ResponseWriter, r *http.Request) {
 }
 
 // Unyeah a post.
-func deletePostYeah(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func deletePostYeah(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 
 	var yeah_id string
 	var community_id string
 	post_id := vars["id"]
-	user_id := currentUser.ID
+	user_id := CurrentUser.ID
 
 	db.QueryRow("SELECT yeahs.id, posts.community_id FROM yeahs INNER JOIN posts ON posts.id = yeahs.yeah_post WHERE yeah_post = ? AND yeah_by = ? AND on_comment = 0", post_id, user_id).Scan(&yeah_id, &community_id)
 
@@ -1508,16 +1382,7 @@ func deletePostYeah(w http.ResponseWriter, r *http.Request) {
 }
 
 // Change a user's account settings.
-func editAccountSettings(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func editAccountSettings(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	yeah_notifications := r.FormValue("yeah_notifications")
 	hide_online := r.FormValue("hide_online")
 	hide_last_seen := r.FormValue("hide_last_seen")
@@ -1544,32 +1409,23 @@ func editAccountSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&yeah_notifications, &hide_online, &hide_last_seen, &group_permissions, &websockets_enabled, &currentUser.ID)
+	stmt.Exec(&yeah_notifications, &hide_online, &hide_last_seen, &group_permissions, &websockets_enabled, &CurrentUser.ID)
 	stmt.Close()
 }
 
 // Edit comments.
-func editComment(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func editComment(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	comment_id := vars["id"]
 
 	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM comments WHERE id = ? AND created_by = ?", comment_id, currentUser.ID).Scan(&count)
+	err := db.QueryRow("SELECT COUNT(*) FROM comments WHERE id = ? AND created_by = ?", comment_id, CurrentUser.ID).Scan(&count)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if count == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
@@ -1618,16 +1474,7 @@ func editComment(w http.ResponseWriter, r *http.Request) {
 }
 
 // Edit a group chat.
-func editGroupChat(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func editGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	var users []int
 	for i := 1; i <= 10; i++ {
 		username := r.FormValue("user" + strconv.Itoa(i))
@@ -1641,14 +1488,14 @@ func editGroupChat(w http.ResponseWriter, r *http.Request) {
 			}
 			if group_permissions == 1 {
 				var followCount int
-				db.QueryRow("SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = ?", currentUser.ID, id).Scan(&followCount)
+				db.QueryRow("SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = ?", CurrentUser.ID, id).Scan(&followCount)
 				if followCount == 0 {
 					http.Error(w, "The user "+username+" does not allow you to add them to chat groups.", http.StatusBadRequest)
 					return
 				}
 			}
 			var friendCount int
-			db.QueryRow("SELECT COUNT(*) FROM friendships WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)", id, currentUser.ID, currentUser.ID, id).Scan(&friendCount)
+			db.QueryRow("SELECT COUNT(*) FROM friendships WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)", id, CurrentUser.ID, CurrentUser.ID, id).Scan(&friendCount)
 			if friendCount == 0 {
 				http.Error(w, "The user "+username+" is not on your friend list.", http.StatusBadRequest)
 				return
@@ -1657,7 +1504,7 @@ func editGroupChat(w http.ResponseWriter, r *http.Request) {
 			users = append(users, id)
 		}
 	}
-	users = append(users, currentUser.ID)
+	users = append(users, CurrentUser.ID)
 
 	vars := mux.Vars(r)
 	conversationID := vars["id"]
@@ -1683,27 +1530,18 @@ func editGroupChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // Edit a post.
-func editPost(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func editPost(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	post_id := vars["id"]
 
 	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM posts WHERE id = ? AND created_by = ?", post_id, currentUser.ID).Scan(&count)
+	err := db.QueryRow("SELECT COUNT(*) FROM posts WHERE id = ? AND created_by = ?", post_id, CurrentUser.ID).Scan(&count)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if count == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
@@ -1763,16 +1601,7 @@ func editPost(w http.ResponseWriter, r *http.Request) {
 }
 
 // Change a user's profile settings.
-func editProfileSettings(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func editProfileSettings(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	var newUser user
 	var newProfile profile
 	newUser.Nickname = r.FormValue("screen_name")
@@ -1947,7 +1776,7 @@ func editProfileSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_, err = stmt.Exec(newUser.Nickname, newUser.Color, newUser.Theme, newUser.ForbiddenKeywords, newUser.DefaultPrivacy, newUser.HasMii, newUser.Avatar, newUser.Email, currentUser.ID)
+	_, err = stmt.Exec(newUser.Nickname, newUser.Color, newUser.Theme, newUser.ForbiddenKeywords, newUser.DefaultPrivacy, newUser.HasMii, newUser.Avatar, newUser.Email, CurrentUser.ID)
 	stmt.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1958,7 +1787,7 @@ func editProfileSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_, err = stmt.Exec(newProfile.CommentText, newProfile.Region, newProfile.Discord, newProfile.YouTube, newProfile.PSN, newProfile.SwitchCode, newProfile.Twitter, newProfile.Steam, newProfile.NNIDVisibility, newProfile.AllowFriend, genderNumber, newProfile.YeahVisibility, newProfile.ReplyVisibility, newProfile.NNID, newProfile.MiiHash, newProfile.AvatarImage, newProfile.AvatarID, currentUser.ID)
+	_, err = stmt.Exec(newProfile.CommentText, newProfile.Region, newProfile.Discord, newProfile.YouTube, newProfile.PSN, newProfile.SwitchCode, newProfile.Twitter, newProfile.Steam, newProfile.NNIDVisibility, newProfile.AllowFriend, genderNumber, newProfile.YeahVisibility, newProfile.ReplyVisibility, newProfile.NNID, newProfile.MiiHash, newProfile.AvatarImage, newProfile.AvatarID, CurrentUser.ID)
 	stmt.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1967,16 +1796,7 @@ func editProfileSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // Favorite a post.
-func favoritePost(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func favoritePost(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	post_id := vars["id"]
 
@@ -1987,7 +1807,7 @@ func favoritePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if count == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
@@ -1996,7 +1816,7 @@ func favoritePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_, err = stmt.Exec(&post_id, currentUser.ID)
+	_, err = stmt.Exec(&post_id, CurrentUser.ID)
 	stmt.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -2027,33 +1847,26 @@ func getMii(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get notification counts.
-func getNotificationCounts(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
+func getNotificationCounts(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	w.Header().Add("Content-Type", "application/json")
 
-	if !currentUser.WebsocketsEnabled {
-		db.QueryRow("UPDATE users SET online = 1, last_seen = NOW() WHERE id = ?", currentUser.ID).Scan()
+	if !CurrentUser.WebsocketsEnabled {
+		db.QueryRow("UPDATE users SET online = 1, last_seen = NOW() WHERE id = ?", CurrentUser.ID).Scan()
 		wait, _ := time.ParseDuration("50s")
 		time.AfterFunc(wait, func() {
 			var online bool
 			var lastSeen time.Time
-			db.QueryRow("SELECT online, last_seen FROM users WHERE id = ?", currentUser.ID).Scan(&online, &lastSeen)
+			db.QueryRow("SELECT online, last_seen FROM users WHERE id = ?", CurrentUser.ID).Scan(&online, &lastSeen)
 			if online == true && time.Now().Sub(lastSeen).Seconds() > 45 {
-				db.QueryRow("UPDATE users SET online = 0 WHERE id = ?", currentUser.ID).Scan()
+				db.QueryRow("UPDATE users SET online = 0 WHERE id = ?", CurrentUser.ID).Scan()
 			}
 		})
 	}
 
 	checkUpdate, err := json.Marshal(map[string]interface{}{
 		"success": true,
-		"n":       currentUser.Notifications.Notifications,
-		"msg":     currentUser.Notifications.Messages,
+		"n":       CurrentUser.Notifications.Notifications,
+		"msg":     CurrentUser.Notifications.Messages,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -2063,16 +1876,7 @@ func getNotificationCounts(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get a user's region.
-func getRegion(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func getRegion(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	if isGeoIPEnabled == false {
 		http.Error(w, "GeoIP is not enabled on this instance of Indigo. Check the README file to learn how to fix this.", http.StatusInternalServerError)
 		return
@@ -2106,18 +1910,13 @@ func getRegion(w http.ResponseWriter, r *http.Request) {
 }
 
 // Handle 404 Not Found requests.
-func handle404(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func handle404(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	w.WriteHeader(http.StatusNotFound)
 	pjax := r.Header.Get("X-PJAX") == ""
 	var data = map[string]interface{}{
 		"Title":       "Error",
 		"Pjax":        pjax,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"Error":       "The page could not be found.",
 	}
 	err := templates.ExecuteTemplate(w, "error.html", data)
@@ -2127,18 +1926,13 @@ func handle404(w http.ResponseWriter, r *http.Request) {
 }
 
 // Handle websocket connections.
-func handleConnections(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func handleConnections(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	// Upgrade initial GET request to a websocket.
-	ws, _ := upgrader.Upgrade(w, r, nil)
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, "FAILED TO UPGRADE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// Make sure we close the connection when the function returns.
 	defer ws.Close()
@@ -2147,8 +1941,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	client := wsSession{}
 	client.Mutex = &sync.Mutex{}
 	client.Connected = true
-	client.UserID = currentUser.ID
-	client.Level = currentUser.Level
+	client.UserID = CurrentUser.ID
+	client.Level = CurrentUser.Level
 	clients[ws] = &client
 
 	stmt, _ := db.Prepare("UPDATE users SET online = 1, last_seen = NOW() WHERE id = ?")
@@ -2189,7 +1983,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 	for client := range clients {
 		if hideOnline {
-			if clients[client].UserID != currentUser.ID {
+			if clients[client].UserID != CurrentUser.ID {
 				continue
 			}
 		}
@@ -2252,12 +2046,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 }
 
 // The handler for the front page.
-func index(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func index(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	pjax := r.Header.Get("X-PJAX") == ""
 
 	featured_rows, err := db.Query("SELECT id, title, icon, banner FROM communities WHERE is_featured = 1 AND rm = 0 LIMIT 4")
@@ -2302,7 +2091,7 @@ func index(w http.ResponseWriter, r *http.Request) {
 	var data = map[string]interface{}{
 		"Title":       "Communities",
 		"Pjax":        pjax,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"Featured":    featured,
 		"Communities": communities,
 	}
@@ -2314,17 +2103,8 @@ func index(w http.ResponseWriter, r *http.Request) {
 }
 
 // Leave a group chat.
-func leaveGroupChat(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
-	// No need to validate any of this since you can't fake a currentUser.
+func leaveGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	// No need to validate any of this since you can't fake a CurrentUser.
 	vars := mux.Vars(r)
 	conversationID := vars["id"]
 	stmt, err := db.Prepare("DELETE FROM group_members WHERE conversation = ? AND user = ?")
@@ -2332,7 +2112,7 @@ func leaveGroupChat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&conversationID, currentUser.ID)
+	stmt.Exec(&conversationID, CurrentUser.ID)
 	stmt.Close()
 
 	// Delete the conversation if nobody is in it anymore.
@@ -2354,19 +2134,24 @@ func leaveGroupChat(w http.ResponseWriter, r *http.Request) {
 // Log a user in.
 func login(w http.ResponseWriter, r *http.Request) {
 	session := sessions.Start(w, r)
+	callback := r.FormValue("callback")
+	redirectTo := "/"
+	if len(callback) != 0 {
+		redirectTo = callback
+	}
 	if len(session.GetString("username")) != 0 && err == nil {
-		http.Redirect(w, r, "/", 302)
+		http.Redirect(w, r, redirectTo, 302)
 	}
 
-	var currentUser user
-	currentUser.LightMode = getLightMode(w, r)
+	var CurrentUser user
+	CurrentUser.LightMode = getLightMode(w, r)
 
 	if r.Method != "POST" {
 		formError := r.FormValue("error")
 		pjax := r.Header.Get("X-PJAX") == ""
 		var data = map[string]interface{}{
 			"Title":        "Log In",
-			"CurrentUser":  currentUser,
+			"CurrentUser":  CurrentUser,
 			"ForceLogins":  settings.ForceLogins,
 			"AllowSignups": settings.AllowSignups,
 			"FormError":    formError,
@@ -2407,10 +2192,10 @@ func login(w http.ResponseWriter, r *http.Request) {
 	users := QueryUser(username, getTimezone(getIP(r)))
 
 	// Compare inputted password to the password in the database. If they're the same, return nil.
-	var password_compare = bcrypt.CompareHashAndPassword([]byte(users.Password), []byte(password))
+	err = bcrypt.CompareHashAndPassword([]byte(users.Password), []byte(password))
 
-	if password_compare == nil {
-		session := sessions.Start(w, r)
+	if err == nil {
+		//session := sessions.Start(w, r)
 		session.Set("username", users.Username)
 		session.Set("user_id", users.ID)
 		stmt, err := db.Prepare("INSERT INTO sessions (id, user) VALUES (?, ?)")
@@ -2455,10 +2240,13 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 		cookie := http.Cookie{Name: "indigo-auth", Value: loginToken, Expires: time.Now().Add(365 * 24 * time.Hour)}
 		http.SetCookie(w, &cookie)
-		http.Redirect(w, r, "/", 302)
 	} else {
-		http.Redirect(w, r, "/login?error=1", 302)
+		redirectTo = "/login?error=1"
+		if len(callback) != 0 {
+			redirectTo = redirectTo+"&callback="+callback
+		}
 	}
+	http.Redirect(w, r, redirectTo, 302)
 }
 
 // Log a user out.
@@ -2493,23 +2281,14 @@ func logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // Import a user's posts from another social network via an external API.
-func migratePosts(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func migratePosts(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	migration_id := vars["id"]
 	var script string
 	var password_required bool
 	db.QueryRow("SELECT script, password_required FROM migrations WHERE id = ? AND is_rm = 0", migration_id).Scan(&script, &password_required)
 	if len(script) == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
@@ -2525,10 +2304,10 @@ func migratePosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var importCount int
-	err = db.QueryRow("SELECT COUNT(*) FROM imports WHERE username = ? AND migration = ? AND user != ?", username, migration_id, currentUser.ID).Scan(&importCount)
+	err = db.QueryRow("SELECT COUNT(*) FROM imports WHERE username = ? AND migration = ? AND user != ?", username, migration_id, CurrentUser.ID).Scan(&importCount)
 	if importCount > 0 {
 		var importUsername string
-		db.QueryRow("SELECT users.username FROM users LEFT JOIN imports ON user = users.id WHERE imports.username = ? AND migration = ? AND user != ? LIMIT 1", username, migration_id, currentUser.ID).Scan(&importUsername)
+		db.QueryRow("SELECT users.username FROM users LEFT JOIN imports ON user = users.id WHERE imports.username = ? AND migration = ? AND user != ? LIMIT 1", username, migration_id, CurrentUser.ID).Scan(&importUsername)
 		http.Error(w, "A user by the username "+importUsername+" has already created a post import request for that user.\nIf you have an issue with this, contact that user or a staff member.", http.StatusBadRequest)
 		return
 	}
@@ -2560,16 +2339,16 @@ func migratePosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	import_id := -1
-	db.QueryRow("SELECT id FROM imports WHERE username = ? AND migration = ? AND user = ?", username, migration_id, currentUser.ID).Scan(&import_id)
+	db.QueryRow("SELECT id FROM imports WHERE username = ? AND migration = ? AND user = ?", username, migration_id, CurrentUser.ID).Scan(&import_id)
 	if import_id == -1 {
 		stmt, _ := db.Prepare("INSERT INTO imports (user, migration, username) VALUES (?, ?, ?)")
-		_, err = stmt.Exec(currentUser.ID, migration_id, username)
+		_, err = stmt.Exec(CurrentUser.ID, migration_id, username)
 		stmt.Close()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		db.QueryRow("SELECT id FROM imports WHERE username = ? AND migration = ? AND user = ?", username, migration_id, currentUser.ID).Scan(&import_id)
+		db.QueryRow("SELECT id FROM imports WHERE username = ? AND migration = ? AND user = ?", username, migration_id, CurrentUser.ID).Scan(&import_id)
 	}
 
 	stmt, err := db.Prepare("INSERT INTO posts (migration, import_id, migrated_id, created_by, migrated_community, created_at, edited_at, feeling, body, image, attachment_type, url, url_type, is_spoiler, is_rm_by_admin, post_type, community_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")
@@ -2609,7 +2388,7 @@ func migratePosts(w http.ResponseWriter, r *http.Request) {
 				runes := []rune(post.Body) // What is this, fucking RuneScape!?
 				post.Body = string(runes[0:1997]) + "..."
 			}
-			_, err = stmt.Exec(migration_id, import_id, post.ID, currentUser.ID, post.CommunityID, post.CreatedAt, post.EditedAt, post.Feeling, post.Body, post.Image, post.AttachmentType, post.URL, urlType, post.IsSpoiler, post.IsRMByAdmin, post.PostType)
+			_, err = stmt.Exec(migration_id, import_id, post.ID, CurrentUser.ID, post.CommunityID, post.CreatedAt, post.EditedAt, post.Feeling, post.Body, post.Image, post.AttachmentType, post.URL, urlType, post.IsSpoiler, post.IsRMByAdmin, post.PostType)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -2640,16 +2419,7 @@ func migratePosts(w http.ResponseWriter, r *http.Request) {
 }
 
 // Send a friend request to a user.
-func newFriendRequest(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func newFriendRequest(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	username := vars["username"]
 	message := r.FormValue("body")
@@ -2665,7 +2435,7 @@ func newFriendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = db.QueryRow("SELECT COUNT(*) FROM friend_requests WHERE request_by = ? AND request_to = ?", user_id, currentUser.ID).Scan(&requested)
+	err = db.QueryRow("SELECT COUNT(*) FROM friend_requests WHERE request_by = ? AND request_to = ?", user_id, CurrentUser.ID).Scan(&requested)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2675,7 +2445,7 @@ func newFriendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if checkIfEitherBlocked(user_id, currentUser.ID) && currentUser.Level == 0 {
+	if checkIfEitherBlocked(user_id, CurrentUser.ID) && CurrentUser.Level == 0 {
 		http.Error(w, "You're not allowed to do that.", http.StatusBadRequest)
 		return
 	}
@@ -2685,7 +2455,7 @@ func newFriendRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&user_id, &currentUser.ID, &message)
+	stmt.Exec(&user_id, &CurrentUser.ID, &message)
 	stmt.Close()
 
 	var msg wsMessage
@@ -2707,16 +2477,7 @@ func newFriendRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // Reject a friend request.
-func rejectFriendRequest(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func rejectFriendRequest(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	username := vars["username"]
 	var user_id int
@@ -2736,26 +2497,17 @@ func rejectFriendRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stmt.Exec(&user_id, &currentUser.ID)
+	stmt.Exec(&user_id, &CurrentUser.ID)
 	stmt.Close()
 }
 
 // Report a comment.
-func reportComment(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func reportComment(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	comment_id := vars["id"]
 	var count int
 
-	err := db.QueryRow("SELECT COUNT(*) FROM comments WHERE id = ? AND created_by != ? AND is_rm = 0", comment_id, currentUser.ID).Scan(&count)
+	err := db.QueryRow("SELECT COUNT(*) FROM comments WHERE id = ? AND created_by != ? AND is_rm = 0", comment_id, CurrentUser.ID).Scan(&count)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2765,7 +2517,7 @@ func reportComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = db.QueryRow("SELECT COUNT(*) FROM reports WHERE type = 1 AND pid = ? AND user = ?", comment_id, currentUser.ID).Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM reports WHERE type = 1 AND pid = ? AND user = ?", comment_id, CurrentUser.ID).Scan(&count)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2780,12 +2532,12 @@ func reportComment(w http.ResponseWriter, r *http.Request) {
 	message := r.FormValue("body")
 
 	stmt, err := db.Prepare("INSERT INTO reports (type, pid, user, reason, message) VALUES (1, ?, ?, ?, ?)")
-	stmt.Exec(&comment_id, &currentUser.ID, &reason, &message)
+	stmt.Exec(&comment_id, &CurrentUser.ID, &reason, &message)
 	stmt.Close()
 
 	if settings.Webhooks.Enabled && len(settings.Webhooks.Reports) > 0 {
 		reasonInt, _ := strconv.Atoi(reason)
-		content := "New report from **" + escapeMarkdown(currentUser.Nickname) + "**.\nReason: " + settings.ReportReasons[reasonInt].Name + "\n"
+		content := "New report from **" + escapeMarkdown(CurrentUser.Nickname) + "**.\nReason: " + settings.ReportReasons[reasonInt].Name + "\n"
 		if len(message) > 0 {
 			content += "Message: " + escapeMarkdown(message) + "\n"
 		}
@@ -2805,29 +2557,21 @@ func reportComment(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete a post/comment/user from a report.
-func reportIgnore(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-	if currentUser.Level < 1 {
+func reportIgnore(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	if CurrentUser.Level < 1 {
 		http.Redirect(w, r, "/", 302)
 		return
 	}
 
 	vars := mux.Vars(r)
 	reportID := vars["id"]
-	var asdasofigheioioeiwjgekwjwjekjegijegwjeijeijweiojjofijqijqjiwqwfijqwijw int
-	err = db.QueryRow("SELECT COUNT(*) FROM reports WHERE id = ?", reportID).Scan(&asdasofigheioioeiwjgekwjwjekjegijegwjeijeijweiojjofijqijqjiwqwfijqwijw)
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM reports WHERE id = ?", reportID).Scan(&count)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if asdasofigheioioeiwjgekwjwjekjegijegwjeijeijweiojjofijqijqjiwqwfijqwijw == 0 {
+	if count == 0 {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -2839,21 +2583,12 @@ func reportIgnore(w http.ResponseWriter, r *http.Request) {
 }
 
 // Report a post.
-func reportPost(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func reportPost(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	post_id := vars["id"]
 	var count int
 
-	err := db.QueryRow("SELECT COUNT(*) FROM posts WHERE id = ? AND created_by != ? AND is_rm = 0 AND is_rm_by_admin = 0", post_id, currentUser.ID).Scan(&count)
+	err := db.QueryRow("SELECT COUNT(*) FROM posts WHERE id = ? AND created_by != ? AND is_rm = 0 AND is_rm_by_admin = 0", post_id, CurrentUser.ID).Scan(&count)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2863,7 +2598,7 @@ func reportPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = db.QueryRow("SELECT COUNT(*) FROM reports WHERE type = 0 AND pid = ? AND user = ?", post_id, currentUser.ID).Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM reports WHERE type = 0 AND pid = ? AND user = ?", post_id, CurrentUser.ID).Scan(&count)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2878,12 +2613,12 @@ func reportPost(w http.ResponseWriter, r *http.Request) {
 	message := r.FormValue("body")
 
 	stmt, err := db.Prepare("INSERT INTO reports (type, pid, user, reason, message) VALUES (0, ?, ?, ?, ?)")
-	stmt.Exec(&post_id, &currentUser.ID, &reason, &message)
+	stmt.Exec(&post_id, &CurrentUser.ID, &reason, &message)
 	stmt.Close()
 
 	if settings.Webhooks.Enabled && len(settings.Webhooks.Reports) > 0 {
 		reasonInt, _ := strconv.Atoi(reason)
-		content := "New report from **" + escapeMarkdown(currentUser.Nickname) + "**.\nReason: " + settings.ReportReasons[reasonInt].Name + "\n"
+		content := "New report from **" + escapeMarkdown(CurrentUser.Nickname) + "**.\nReason: " + settings.ReportReasons[reasonInt].Name + "\n"
 		if len(message) > 0 {
 			content += "Message: " + escapeMarkdown(message) + "\n"
 		}
@@ -2903,21 +2638,12 @@ func reportPost(w http.ResponseWriter, r *http.Request) {
 }
 
 // Report a user.
-func reportUser(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func reportUser(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	username := vars["username"]
 	var userID int
 
-	err := db.QueryRow("SELECT id FROM users WHERE username = ? AND id != ?", username, currentUser.ID).Scan(&userID)
+	err := db.QueryRow("SELECT id FROM users WHERE username = ? AND id != ?", username, CurrentUser.ID).Scan(&userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2929,7 +2655,7 @@ func reportUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var reportCount int
-	err = db.QueryRow("SELECT COUNT(*) FROM reports WHERE type = 2 AND pid = ? AND user = ?", userID, currentUser.ID).Scan(&reportCount)
+	err = db.QueryRow("SELECT COUNT(*) FROM reports WHERE type = 2 AND pid = ? AND user = ?", userID, CurrentUser.ID).Scan(&reportCount)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2944,12 +2670,12 @@ func reportUser(w http.ResponseWriter, r *http.Request) {
 	message := r.FormValue("body")
 
 	stmt, err := db.Prepare("INSERT INTO reports (type, pid, user, reason, message) VALUES (2, ?, ?, ?, ?)")
-	stmt.Exec(&userID, &currentUser.ID, &reason, &message)
+	stmt.Exec(&userID, &CurrentUser.ID, &reason, &message)
 	stmt.Close()
 
 	if settings.Webhooks.Enabled && len(settings.Webhooks.Reports) > 0 {
 		reasonInt, _ := strconv.Atoi(reason)
-		content := fmt.Sprintf("New report from **%s**.\nReason: %s\nMessage: %s\nUser link: %s/users/%s", escapeMarkdown(currentUser.Nickname), settings.ReportReasons[reasonInt].Name, escapeMarkdown(message), getHostname(r.Host), url.PathEscape(username))
+		content := fmt.Sprintf("New report from **%s**.\nReason: %s\nMessage: %s\nUser link: %s/users/%s", escapeMarkdown(CurrentUser.Nickname), settings.ReportReasons[reasonInt].Name, escapeMarkdown(message), getHostname(r.Host), url.PathEscape(username))
 		data := map[string]interface{}{
 			"content": content,
 		}
@@ -2965,12 +2691,7 @@ func reportUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // Reset a user's password.
-func resetPassword(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func resetPassword(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	var data map[string]interface{}
 	var userID int
 	var username string
@@ -2984,7 +2705,7 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 	if len(username) == 0 {
 		data = map[string]interface{}{
 			"Title":       "Reset Password",
-			"CurrentUser": currentUser,
+			"CurrentUser": CurrentUser,
 			"Action":      "error",
 			"Error":       "The token you specified was not found in our database.",
 		}
@@ -2995,7 +2716,7 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			data = map[string]interface{}{
 				"Title":       "Reset Password",
-				"CurrentUser": currentUser,
+				"CurrentUser": CurrentUser,
 				"Action":      "reset",
 				"Error":       "Your password and confirm password must match.",
 				"CSRFField":   csrf.TemplateField(r),
@@ -3004,7 +2725,7 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			data = map[string]interface{}{
 				"Title":       "Reset Password",
-				"CurrentUser": currentUser,
+				"CurrentUser": CurrentUser,
 				"Action":      "reset",
 				"Error":       "You must enter a password.",
 				"CSRFField":   csrf.TemplateField(r),
@@ -3046,13 +2767,13 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			currentUser, success = doSession(w, r)
+			CurrentUser, success := doSession(w, r)
 			if !success {
 				return
 			}
 			data = map[string]interface{}{
 				"Title":       "Reset Password",
-				"CurrentUser": currentUser,
+				"CurrentUser": CurrentUser,
 				"Action":      "success",
 				"Username":    username,
 			}
@@ -3060,7 +2781,7 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 	} else {
 		data = map[string]interface{}{
 			"Title":       "Reset Password",
-			"CurrentUser": currentUser,
+			"CurrentUser": CurrentUser,
 			"Action":      "reset",
 			"Username":    username,
 			"CSRFField":   csrf.TemplateField(r),
@@ -3074,16 +2795,7 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // Rollback a post import.
-func rollbackImport(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func rollbackImport(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	import_id := vars["id"]
 	_, err = db.Exec("UPDATE posts SET is_rm = 1 WHERE import_id = ?", import_id)
@@ -3091,24 +2803,15 @@ func rollbackImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_, err = db.Exec("DELETE FROM imports WHERE id = ? AND user = ?", import_id, currentUser.ID)
+	_, err = db.Exec("DELETE FROM imports WHERE id = ? AND user = ?", import_id, CurrentUser.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
 // Send a message.
-func sendMessage(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
-	user_id := currentUser.ID
+func sendMessage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	user_id := CurrentUser.ID
 	conversation_id := r.FormValue("conversation")
 	post_type := r.FormValue("post_type")
 	body := r.FormValue("body")
@@ -3135,7 +2838,7 @@ func sendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	if target == 0 {
 		var userCount int
-		err = db.QueryRow("SELECT COUNT(*) FROM group_members WHERE user = ? AND conversation = ?", currentUser.ID, conversation_id).Scan(&userCount)
+		err = db.QueryRow("SELECT COUNT(*) FROM group_members WHERE user = ? AND conversation = ?", CurrentUser.ID, conversation_id).Scan(&userCount)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -3233,7 +2936,7 @@ func sendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages.Date = humanTiming(timestamp, currentUser.Timezone)
+	messages.Date = humanTiming(timestamp, CurrentUser.Timezone)
 	messages.DateUnix = timestamp.Unix()
 	messages.Feeling, err = strconv.Atoi(feeling)
 	if err != nil {
@@ -3250,11 +2953,11 @@ func sendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	messages.URL = messageURL
 	messages.URLType = url_type
-	messages.ByUsername = currentUser.Username
-	messages.ByAvatar = getAvatar(messages.ByAvatar, currentUser.HasMii, messages.Feeling)
-	messages.ByOnline = currentUser.Online
-	messages.ByHideOnline = currentUser.HideOnline
-	messages.ByRoleImage = currentUser.Role.Image
+	messages.ByUsername = CurrentUser.Username
+	messages.ByAvatar = getAvatar(messages.ByAvatar, CurrentUser.HasMii, messages.Feeling)
+	messages.ByOnline = CurrentUser.Online
+	messages.ByHideOnline = CurrentUser.HideOnline
+	messages.ByRoleImage = CurrentUser.Role.Image
 	messages.ByMe = true
 
 	err = templates.ExecuteTemplate(w, "render_message.html", messages)
@@ -3268,7 +2971,7 @@ func sendMessage(w http.ResponseWriter, r *http.Request) {
 	templates.ExecuteTemplate(&msgTpl, "render_message.html", messages)
 
 	if target == 0 {
-		_, err = db.Exec("UPDATE group_members SET unread_messages = unread_messages + 1 WHERE user != ? AND conversation = ?", currentUser.ID, conversation_id)
+		_, err = db.Exec("UPDATE group_members SET unread_messages = unread_messages + 1 WHERE user != ? AND conversation = ?", CurrentUser.ID, conversation_id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -3282,9 +2985,9 @@ func sendMessage(w http.ResponseWriter, r *http.Request) {
 	for client := range clients {
 		var qualifies bool
 		if target == 0 {
-			qualifies = clients[client].OnPage == "/conversations/"+conversation_id && clients[client].UserID != currentUser.ID // not checking if the user is in the conversation or not is a SECURITY ISSUE, change this ASAP!
+			qualifies = clients[client].OnPage == "/conversations/"+conversation_id && clients[client].UserID != CurrentUser.ID // not checking if the user is in the conversation or not is a SECURITY ISSUE, change this ASAP!
 		} else {
-			qualifies = clients[client].OnPage == "/messages/"+url.PathEscape(currentUser.Username) && clients[client].UserID == otherUserID
+			qualifies = clients[client].OnPage == "/messages/"+url.PathEscape(CurrentUser.Username) && clients[client].UserID == otherUserID
 		}
 		if qualifies {
 			writeWs(clients[client], client, msg)
@@ -3295,11 +2998,11 @@ func sendMessage(w http.ResponseWriter, r *http.Request) {
 		} else if clients[client].UserID == otherUserID || target == 0 {
 			if target == 0 {
 				inConversation := false
-				member_rows, _ := db.Query("SELECT user FROM group_members WHERE conversation = ? AND user != ?", conversation_id, currentUser.ID)
+				member_rows, _ := db.Query("SELECT user FROM group_members WHERE conversation = ? AND user != ?", conversation_id, CurrentUser.ID)
 				for member_rows.Next() {
-					var currentUserID int
-					member_rows.Scan(&currentUserID)
-					if currentUserID == clients[client].UserID {
+					var CurrentUserID int
+					member_rows.Scan(&CurrentUserID)
+					if CurrentUserID == clients[client].UserID {
 						inConversation = true
 						break
 					}
@@ -3329,7 +3032,7 @@ func sendMessage(w http.ResponseWriter, r *http.Request) {
 					messagePreview.URLType = 1
 					messagePreview.ByUsername = conversation_id
 				} else {
-					messagePreview.URL = currentUser.Nickname
+					messagePreview.URL = CurrentUser.Nickname
 					messagePreview.URLType = 0
 					messagePreview.ByUsername = messages.ByUsername
 				}
@@ -3360,24 +3063,15 @@ func sendMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a user's account settings.
-func showAccountSettings(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func showAccountSettings(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	var groupPermissions bool
-	err := db.QueryRow("SELECT group_permissions FROM users WHERE id = ?", currentUser.ID).Scan(&groupPermissions)
+	err := db.QueryRow("SELECT group_permissions FROM users WHERE id = ?", CurrentUser.ID).Scan(&groupPermissions)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	accountSettings := [5]bool{currentUser.YeahNotifications, currentUser.HideOnline, currentUser.HideLastSeen, groupPermissions, currentUser.WebsocketsEnabled}
+	accountSettings := [5]bool{CurrentUser.YeahNotifications, CurrentUser.HideOnline, CurrentUser.HideLastSeen, groupPermissions, CurrentUser.WebsocketsEnabled}
 	accountSettingsJSON, _ := json.Marshal(accountSettings)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -3385,22 +3079,14 @@ func showAccountSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show the Activity Feed.
-func showActivityFeed(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
-
+func showActivityFeed(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	pjax := r.Header.Get("X-PJAX") == ""
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 	repost := r.FormValue("repost")
 	var rp repostPreview
 
 	if len(repost) > 0 {
-		repost_row, err := db.Query("SELECT posts.id, nickname, body, post_type FROM posts LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND is_rm_by_admin = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) LIMIT 1", repost, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID)
+		repost_row, err := db.Query("SELECT posts.id, nickname, body, post_type FROM posts LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND is_rm_by_admin = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) LIMIT 1", repost, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -3418,7 +3104,7 @@ func showActivityFeed(w http.ResponseWriter, r *http.Request) {
 
 	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" && pjax {
 		offset, _ := strconv.Atoi(r.FormValue("offset"))
-		post_rows, err := db.Query("SELECT posts.id, created_by, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, communities.id, title, icon, username, nickname, avatar, has_mh, online, hide_online, color, role FROM posts LEFT JOIN communities ON communities.id = community_id LEFT JOIN users ON users.id = created_by WHERE created_by IN (SELECT follow_to FROM follows WHERE follow_by = ?) AND is_rm = 0 AND is_rm_by_admin = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) ORDER BY posts.created_at DESC, posts.id DESC LIMIT 20 OFFSET ?", currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID, offset)
+		post_rows, err := db.Query("SELECT posts.id, created_by, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, communities.id, title, icon, username, nickname, avatar, has_mh, online, hide_online, color, role FROM posts LEFT JOIN communities ON communities.id = community_id LEFT JOIN users ON users.id = created_by WHERE created_by IN (SELECT follow_to FROM follows WHERE follow_by = ?) AND is_rm = 0 AND is_rm_by_admin = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) ORDER BY posts.created_at DESC, posts.id DESC LIMIT 20 OFFSET ?", CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID, offset)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -3433,7 +3119,7 @@ func showActivityFeed(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			row = setupPost(row, currentUser, 2, 0)
+			row = setupPost(row, CurrentUser, 2, 0)
 			posts = append(posts, row)
 		}
 		post_rows.Close()
@@ -3451,7 +3137,7 @@ func showActivityFeed(w http.ResponseWriter, r *http.Request) {
 		var data = map[string]interface{}{
 			"Title":          "Activity Feed",
 			"Pjax":           pjax,
-			"CurrentUser":    currentUser,
+			"CurrentUser":    CurrentUser,
 			"FriendCount":    friendCount,
 			"FollowingCount": followingCount,
 			"FollowerCount":  followerCount,
@@ -3467,16 +3153,8 @@ func showActivityFeed(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show the admin dashboard.
-func showAdminDashboard(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-	if currentUser.Level < 1 {
+func showAdminDashboard(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	if CurrentUser.Level < 1 {
 		http.Redirect(w, r, "/", 302)
 		return
 	}
@@ -3512,7 +3190,7 @@ func showAdminDashboard(w http.ResponseWriter, r *http.Request) {
 			row.CommunityName = "Comment on " + row.CommunityName + "'s Post"
 			row.CommentCount = -1
 		}
-		row = setupPost(row, currentUser, 3, 2)
+		row = setupPost(row, CurrentUser, 3, 2)
 		report.Post = row
 		reports = append(reports, report)
 	}
@@ -3524,7 +3202,7 @@ func showAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		"Title":       "Admin Dashboard",
 		"Pjax":        pjax,
 		"Offset":      offset,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"Admin":       admin,
 		"Reports":     reports,
 	}
@@ -3535,16 +3213,8 @@ func showAdminDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show the list of admin managers.
-func showAdminManagerList(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-	if currentUser.Level < admin.Manage.MinimumLevel {
+func showAdminManagerList(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	if CurrentUser.Level < admin.Manage.MinimumLevel {
 		http.Redirect(w, r, "/", 302)
 		return
 	}
@@ -3554,7 +3224,7 @@ func showAdminManagerList(w http.ResponseWriter, r *http.Request) {
 	var data = map[string]interface{}{
 		"Title":       "Manage",
 		"Pjax":        pjax,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"Admin":       admin,
 	}
 	err = templates.ExecuteTemplate(w, "manage.html", data)
@@ -3564,16 +3234,8 @@ func showAdminManagerList(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show the admin settings.
-func showAdminSettings(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-	if currentUser.Level < admin.Settings.MinimumLevel {
+func showAdminSettings(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	if CurrentUser.Level < admin.Settings.MinimumLevel {
 		http.Redirect(w, r, "/", 302)
 		return
 	}
@@ -3653,7 +3315,7 @@ func showAdminSettings(w http.ResponseWriter, r *http.Request) {
 	var data = map[string]interface{}{
 		"Title":       "Admin Settings",
 		"Pjax":        pjax,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"Admin":       admin,
 		"Settings":    settings,
 	}
@@ -3664,12 +3326,7 @@ func showAdminSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a post's full comment section.
-func showAllComments(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showAllComments(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	post_id := vars["id"]
 
@@ -3684,7 +3341,7 @@ func showAllComments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	comment_rows, _ := db.Query("SELECT comments.id, created_by, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, is_rm_by_admin, username, nickname, avatar, has_mh, online, hide_online, color, role FROM comments LEFT JOIN users ON users.id = created_by WHERE post = ? AND is_rm = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) ORDER BY created_at ASC", post_id, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords))
+	comment_rows, _ := db.Query("SELECT comments.id, created_by, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, is_rm_by_admin, username, nickname, avatar, has_mh, online, hide_online, color, role FROM comments LEFT JOIN users ON users.id = created_by WHERE post = ? AND is_rm = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) ORDER BY created_at ASC", post_id, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords))
 	var comments []comment
 	var pinnedComments []comment
 
@@ -3706,18 +3363,18 @@ func showAllComments(w http.ResponseWriter, r *http.Request) {
 			row.CommenterRoleImage = getRoleImage(role)
 		}
 
-		row.CreatedAt = humanTiming(timestamp, currentUser.Timezone)
+		row.CreatedAt = humanTiming(timestamp, CurrentUser.Timezone)
 		row.CreatedAtUnix = timestamp.Unix()
 		if editedAt.Sub(timestamp).Minutes() > 5 {
-			row.EditedAt = humanTiming(editedAt, currentUser.Timezone)
+			row.EditedAt = humanTiming(editedAt, CurrentUser.Timezone)
 			row.EditedAtUnix = editedAt.Unix()
 		}
 		row.Body = parseBody(row.BodyText, false, true)
 
 		row.ByMe = row.CreatedBy == createdBy
-		row.CanYeah = checkIfCanYeah(currentUser, row.CreatedBy)
+		row.CanYeah = checkIfCanYeah(CurrentUser, row.CreatedBy)
 
-		db.QueryRow("SELECT 1 FROM yeahs WHERE yeah_post = ? AND yeah_by = ? AND on_comment = 1", row.ID, currentUser.ID).Scan(&row.Yeahed)
+		db.QueryRow("SELECT 1 FROM yeahs WHERE yeah_post = ? AND yeah_by = ? AND on_comment = 1", row.ID, CurrentUser.ID).Scan(&row.Yeahed)
 		db.QueryRow("SELECT COUNT(*) FROM yeahs WHERE yeah_post = ? AND on_comment = 1", row.ID).Scan(&row.YeahCount)
 
 		if row.Pinned {
@@ -3727,9 +3384,8 @@ func showAllComments(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	comment_rows.Close()
-
 	var data = map[string]interface{}{
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"PinnedComments": pinnedComments,
 		"Comments":       comments,
 	}
@@ -3740,15 +3396,10 @@ func showAllComments(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a list of all the communities.
-func showAllCommunities(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showAllCommunities(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	community_rows, err := db.Query("SELECT id, title, icon FROM communities WHERE rm = 0 ORDER BY id DESC LIMIT 25 OFFSET ?", offset)
 	if err != nil {
@@ -3778,7 +3429,7 @@ func showAllCommunities(w http.ResponseWriter, r *http.Request) {
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"Communities":    communities,
 	}
 	err = templates.ExecuteTemplate(w, "all_communities.html", data)
@@ -3789,21 +3440,12 @@ func showAllCommunities(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a user's block list.
-func showBlocked(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func showBlocked(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	pjax := r.Header.Get("X-PJAX") == ""
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
-	user_rows, err := db.Query("SELECT users.id, username, nickname, avatar, has_mh, online, hide_online, color, role, created_at FROM users LEFT JOIN blocks ON users.id = target WHERE source = ? ORDER BY blocks.id DESC LIMIT 25 OFFSET ?", currentUser.ID, offset)
+	user_rows, err := db.Query("SELECT users.id, username, nickname, avatar, has_mh, online, hide_online, color, role, created_at FROM users LEFT JOIN blocks ON users.id = target WHERE source = ? ORDER BY blocks.id DESC LIMIT 25 OFFSET ?", CurrentUser.ID, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -3824,7 +3466,7 @@ func showBlocked(w http.ResponseWriter, r *http.Request) {
 		if role > 0 {
 			row.Role.Image = getRoleImage(role)
 		}
-		row.LastSeen = humanTiming(timestamp, currentUser.Timezone)
+		row.LastSeen = humanTiming(timestamp, CurrentUser.Timezone)
 
 		users = append(users, row)
 	}
@@ -3839,7 +3481,7 @@ func showBlocked(w http.ResponseWriter, r *http.Request) {
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"Users":          users,
 	}
 	err = templates.ExecuteTemplate(w, "blocked.html", data)
@@ -3849,12 +3491,7 @@ func showBlocked(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a comment.
-func showComment(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showComment(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	comment_id := vars["id"]
 	pjax := r.Header.Get("X-PJAX") == ""
@@ -3868,7 +3505,7 @@ func showComment(w http.ResponseWriter, r *http.Request) {
 
 	db.QueryRow("SELECT comments.id, created_by, created_at, edited_at, post, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, is_rm_by_admin, username, nickname, avatar, has_mh, online, hide_online, color, role FROM comments LEFT JOIN users ON users.id = created_by WHERE comments.id = ? AND is_rm = 0", comment_id).Scan(&comments.ID, &comments.CreatedBy, &timestamp, &editedAt, &comments.PostID, &comments.Feeling, &comments.BodyText, &comments.Image, &comments.AttachmentType, &comments.IsSpoiler, &comments.PostType, &comments.URL, &comments.URLType, &comments.Pinned, &comments.IsRMByAdmin, &comments.CommenterUsername, &comments.CommenterNickname, &comments.CommenterIcon, &comments.CommenterHasMii, &comments.CommenterOnline, &comments.CommenterHideOnline, &comments.CommenterColor, &role)
 	if len(string(comments.CommenterUsername)) == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
@@ -3877,34 +3514,34 @@ func showComment(w http.ResponseWriter, r *http.Request) {
 		comments.CommenterRoleImage, comments.CommenterRoleOrganization = getRoleImageAndOrganization(role)
 	}
 
-	comments.CreatedAt = humanTiming(timestamp, currentUser.Timezone)
+	comments.CreatedAt = humanTiming(timestamp, CurrentUser.Timezone)
 	comments.CreatedAtUnix = timestamp.Unix()
 	if editedAt.Sub(timestamp).Minutes() > 5 {
-		comments.EditedAt = humanTiming(editedAt, currentUser.Timezone)
+		comments.EditedAt = humanTiming(editedAt, CurrentUser.Timezone)
 		comments.EditedAtUnix = editedAt.Unix()
 	}
 	comments.Body = parseBody(comments.BodyText, false, true)
-	if comments.CreatedBy == currentUser.ID {
+	if comments.CreatedBy == CurrentUser.ID {
 		comments.ByMe = true
 	}
-	comments.CanYeah = checkIfCanYeah(currentUser, comments.CreatedBy)
+	comments.CanYeah = checkIfCanYeah(CurrentUser, comments.CreatedBy)
 
-	db.QueryRow("SELECT feeling, body, privacy, post_type, is_rm | is_rm_by_admin, nickname, avatar, has_mh, communities.id, title, icon, rm FROM posts INNER JOIN users ON users.id = posts.created_by INNER JOIN communities ON communities.id = community_id WHERE posts.id = ? AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?)", comments.PostID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID).Scan(&posts.Feeling, &posts.BodyText, &posts.Privacy, &posts.PostType, &posts.IsRM, &posts.PosterNickname, &posts.PosterIcon, &posts.PosterHasMii, &posts.CommunityID, &posts.CommunityName, &posts.CommunityIcon, &posts.CommunityRM)
+	db.QueryRow("SELECT feeling, body, privacy, post_type, is_rm | is_rm_by_admin, nickname, avatar, has_mh, communities.id, title, icon, rm FROM posts INNER JOIN users ON users.id = posts.created_by INNER JOIN communities ON communities.id = community_id WHERE posts.id = ? AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?)", comments.PostID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID).Scan(&posts.Feeling, &posts.BodyText, &posts.Privacy, &posts.PostType, &posts.IsRM, &posts.PosterNickname, &posts.PosterIcon, &posts.PosterHasMii, &posts.CommunityID, &posts.CommunityName, &posts.CommunityIcon, &posts.CommunityRM)
 	if len(posts.CommunityName) == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 	posts.PosterIcon = getAvatar(posts.PosterIcon, posts.PosterHasMii, posts.Feeling)
 	posts.BodyText = parsePreview(posts.BodyText, posts.PostType, posts.IsRM)
 
-	db.QueryRow("SELECT id FROM yeahs WHERE yeah_post = ? AND yeah_by = ? AND on_comment = 1", comments.ID, currentUser.ID).Scan(&yeahed)
+	db.QueryRow("SELECT id FROM yeahs WHERE yeah_post = ? AND yeah_by = ? AND on_comment = 1", comments.ID, CurrentUser.ID).Scan(&yeahed)
 	if yeahed != "" {
 		comments.Yeahed = true
 	}
 
 	db.QueryRow("SELECT COUNT(*) FROM yeahs WHERE yeah_post = ? AND on_comment = 1", comment_id).Scan(&comments.YeahCount)
 
-	yeah_rows, _ := db.Query("SELECT yeahs.id, username, avatar, has_mh, role FROM yeahs LEFT JOIN users ON users.id = yeah_by WHERE yeah_post = ? AND yeah_by != ? AND on_comment = 1 ORDER BY yeahs.id DESC", comment_id, currentUser.ID)
+	yeah_rows, _ := db.Query("SELECT yeahs.id, username, avatar, has_mh, role FROM yeahs LEFT JOIN users ON users.id = yeah_by WHERE yeah_post = ? AND yeah_by != ? AND on_comment = 1 ORDER BY yeahs.id DESC", comment_id, CurrentUser.ID)
 	var yeahs []yeah
 
 	for yeah_rows.Next() {
@@ -3929,7 +3566,7 @@ func showComment(w http.ResponseWriter, r *http.Request) {
 	var data = map[string]interface{}{
 		"Title":       comments.CommenterNickname + "'s Comment on " + posts.PosterNickname + "'s Post",
 		"Pjax":        pjax,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"Comment":     comments,
 		"Post":        posts,
 		"Yeahs":       yeahs,
@@ -3942,27 +3579,27 @@ func showComment(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a community.
-func showCommunity(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showCommunity(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	community_id := vars["id"]
 	communities := QueryCommunity(community_id, false)
 	if len(communities.Title) == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
+	// per-second precision
+	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
+	if err != nil {
+		offsetTime = time.Now().Unix()
+	}
 	query := r.URL.Query().Get("q")
 	repost := r.FormValue("repost")
 	var rp repostPreview
 
 	if len(repost) > 0 {
-		repost_row, err := db.Query("SELECT posts.id, nickname, body, post_type FROM posts LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND is_rm_by_admin = 0 AND (users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) OR ? > 0) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) LIMIT 1", repost, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID)
+		repost_row, err := db.Query("SELECT posts.id, nickname, body, post_type FROM posts LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND is_rm_by_admin = 0 AND (users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) OR ? > 0) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) LIMIT 1", repost, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -3979,9 +3616,9 @@ func showCommunity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var favoriteGiven bool
-	if len(currentUser.Username) > 0 {
+	if len(CurrentUser.Username) > 0 {
 		var favorited int
-		err = db.QueryRow("SELECT COUNT(*) FROM community_favorites WHERE community = ? AND favorite_by = ?", community_id, currentUser.ID).Scan(&favorited)
+		err = db.QueryRow("SELECT COUNT(*) FROM community_favorites WHERE community = ? AND favorite_by = ?", community_id, CurrentUser.ID).Scan(&favorited)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -3991,7 +3628,7 @@ func showCommunity(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	post_rows, err := db.Query("SELECT posts.id, created_by, posts.created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, username, nickname, avatar, has_mh, online, hide_online, color, role FROM posts INNER JOIN users ON users.id = created_by WHERE community_id = ? AND is_rm = 0 AND is_rm_by_admin = 0 AND migration = 0 AND body LIKE CONCAT('%', ?, '%') AND (users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) OR ? > 0) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) ORDER BY pinned DESC, posts.id DESC, posts.created_at DESC LIMIT 25 OFFSET ?", community_id, query, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID, offset)
+	post_rows, err := db.Query("SELECT posts.id, created_by, posts.created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, username, nickname, avatar, has_mh, online, hide_online, color, role FROM posts INNER JOIN users ON users.id = created_by WHERE community_id = ? AND is_rm = 0 AND is_rm_by_admin = 0 AND migration = 0 AND UNIX_TIMESTAMP(posts.created_at) <= ? AND body LIKE CONCAT('%', ?, '%') AND (users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) OR ? > 0) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) ORDER BY pinned DESC, posts.id DESC, posts.created_at DESC LIMIT 25 OFFSET ?", community_id, offsetTime, query, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -4005,7 +3642,7 @@ func showCommunity(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		row = setupPost(row, currentUser, 0, 0)
+		row = setupPost(row, CurrentUser, 0, 0)
 		posts = append(posts, row)
 	}
 	post_rows.Close()
@@ -4016,9 +3653,10 @@ func showCommunity(w http.ResponseWriter, r *http.Request) {
 		"Title":         communities.Title,
 		"Pjax":          pjax,
 		"Offset":        offset,
+		"OffsetTime":    offsetTime,
 		"Query":         query,
 		"Repost":        rp,
-		"CurrentUser":   currentUser,
+		"CurrentUser":   CurrentUser,
 		"Community":     communities,
 		"FavoriteGiven": favoriteGiven,
 		"PopularPosts":  false,
@@ -4032,16 +3670,11 @@ func showCommunity(w http.ResponseWriter, r *http.Request) {
 }
 
 // Search for communities.
-func showCommunitySearch(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showCommunitySearch(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	query := vars["search"]
 	if len(query) == 0 || utf8.RuneCountInString(query) > 32 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 	pjax := r.Header.Get("X-PJAX") == ""
@@ -4068,13 +3701,13 @@ func showCommunitySearch(w http.ResponseWriter, r *http.Request) {
 	user_rows.Close()
 	offset += 20
 
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          "Search Communities",
 		"Pjax":           pjax,
 		"Offset":         offset,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -4090,18 +3723,14 @@ func showCommunitySearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show the team contact page.
-func showContactPage(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
+func showContactPage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	pjax := r.Header.Get("X-PJAX") == ""
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          "Contact the Team",
 		"Pjax":           pjax,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -4114,33 +3743,29 @@ func showContactPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show conversation.
-func showConversation(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
-
+func showConversation(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
+	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
+	if err != nil {
+		offsetTime = time.Now().Unix()
+	}
 	query := r.URL.Query().Get("q")
 	username := vars["username"]
-	user := QueryUser(username, currentUser.Timezone)
+	user := QueryUser(username, CurrentUser.Timezone)
 	if len(user.Username) == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 	var conversationID int
-	err := db.QueryRow("SELECT id FROM conversations WHERE ((source = ? AND target = ?) OR (source = ? AND target = ?)) AND is_rm = 0", currentUser.ID, user.ID, user.ID, currentUser.ID).Scan(&conversationID)
+	err = db.QueryRow("SELECT id FROM conversations WHERE ((source = ? AND target = ?) OR (source = ? AND target = ?)) AND is_rm = 0", CurrentUser.ID, user.ID, user.ID, CurrentUser.ID).Scan(&conversationID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	message_rows, err := db.Query("SELECT messages.id, created_at, created_by, feeling, body, image, attachment_type, url, url_type, post_type, username, avatar, has_mh, online, hide_online, color, role FROM messages LEFT JOIN users ON users.id = created_by WHERE conversation_id = ? AND is_rm = 0 AND body LIKE CONCAT('%', ?, '%') ORDER BY messages.id DESC LIMIT 20 OFFSET ?", conversationID, query, offset)
+	message_rows, err := db.Query("SELECT messages.id, created_at, created_by, feeling, body, image, attachment_type, url, url_type, post_type, username, avatar, has_mh, online, hide_online, color, role FROM messages LEFT JOIN users ON users.id = created_by WHERE conversation_id = ? AND UNIX_TIMESTAMP(created_at) <= ? AND is_rm = 0 AND body LIKE CONCAT('%', ?, '%') ORDER BY messages.id DESC LIMIT 20 OFFSET ?", conversationID, offsetTime, query, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -4164,11 +3789,11 @@ func showConversation(w http.ResponseWriter, r *http.Request) {
 			row.ByRoleImage = getRoleImage(role)
 		}
 
-		row.Date = humanTiming(timestamp, currentUser.Timezone)
+		row.Date = humanTiming(timestamp, CurrentUser.Timezone)
 		row.DateUnix = timestamp.Unix()
 		row.Body = parseBody(row.BodyText, false, true)
 
-		if createdBy == currentUser.ID {
+		if createdBy == CurrentUser.ID {
 			row.ByMe = true
 		}
 
@@ -4189,17 +3814,18 @@ func showConversation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	offset += 20
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          "Conversation with " + user.Nickname + " (" + user.Username + ")",
 		"Offset":         offset,
+		"OffsetTime":     offsetTime,
 		"Pjax":           pjax,
 		"Query":          query,
 		"User":           user,
 		"ConversationID": conversationID,
 		"IsGroupChat":    false,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -4214,13 +3840,13 @@ func showConversation(w http.ResponseWriter, r *http.Request) {
 	var msg wsMessage
 	msg.Type = "messageNotif"
 	var unread int
-	db.QueryRow("SELECT COUNT(*) FROM messages LEFT JOIN conversations ON conversation_id = conversations.id WHERE (source = ? OR target = ?) AND created_by <> ? AND msg_read = 0 AND messages.is_rm = 0 AND conversations.is_rm = 0", &currentUser.ID, &currentUser.ID, &currentUser.ID).Scan(&unread)
+	db.QueryRow("SELECT COUNT(*) FROM messages LEFT JOIN conversations ON conversation_id = conversations.id WHERE (source = ? OR target = ?) AND created_by <> ? AND msg_read = 0 AND messages.is_rm = 0 AND conversations.is_rm = 0", &CurrentUser.ID, &CurrentUser.ID, &CurrentUser.ID).Scan(&unread)
 	var groupUnread int
-	db.QueryRow("SELECT SUM(unread_messages) FROM group_members WHERE user = ?", currentUser.ID).Scan(&groupUnread)
+	db.QueryRow("SELECT SUM(unread_messages) FROM group_members WHERE user = ?", CurrentUser.ID).Scan(&groupUnread)
 	unread += groupUnread
 	msg.Content = strconv.Itoa(unread)
 	for client := range clients {
-		if clients[client].UserID == currentUser.ID {
+		if clients[client].UserID == CurrentUser.ID {
 			err := writeWs(clients[client], client, msg)
 			if err != nil {
 				client.Close()
@@ -4231,18 +3857,11 @@ func showConversation(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show the "Create Group Chat" page.
-func showCreateGroupChat(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
+func showCreateGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 
-	friend_rows, err := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM friendships LEFT JOIN users ON users.id = if(source = ?, target, source) LEFT JOIN profiles ON user = users.id WHERE (source = ? OR target = ?) AND (group_permissions = 0 OR (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = user) > 0) ORDER BY friendships.id DESC LIMIT 20 OFFSET ?", currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, offset)
+	friend_rows, err := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM friendships LEFT JOIN users ON users.id = if(source = ?, target, source) LEFT JOIN profiles ON user = users.id WHERE (source = ? OR target = ?) AND (group_permissions = 0 OR (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = user) > 0) ORDER BY friendships.id DESC LIMIT 20 OFFSET ?", CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -4263,14 +3882,14 @@ func showCreateGroupChat(w http.ResponseWriter, r *http.Request) {
 	}
 	friend_rows.Close()
 
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 	offset += 20
 
 	var data = map[string]interface{}{
 		"Title":          "Create Group Chat",
 		"Pjax":           pjax,
 		"Offset":         offset,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -4284,20 +3903,13 @@ func showCreateGroupChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show the "Edit Group Chat" page.
-func showEditGroupChat(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
+func showEditGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	conversationID := vars["id"]
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 
-	member_rows, err := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM friendships LEFT JOIN users ON users.id = if(source = ?, target, source) LEFT JOIN profiles ON profiles.user = users.id LEFT JOIN group_members ON users.id = group_members.user WHERE (source = ? or target = ?) AND (group_permissions = 0 OR (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = users.id) > 0) AND conversation = ? ORDER BY group_members.id ASC LIMIT 20 OFFSET ?", currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, conversationID, offset)
+	member_rows, err := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM friendships LEFT JOIN users ON users.id = if(source = ?, target, source) LEFT JOIN profiles ON profiles.user = users.id LEFT JOIN group_members ON users.id = group_members.user WHERE (source = ? or target = ?) AND (group_permissions = 0 OR (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = users.id) > 0) AND conversation = ? ORDER BY group_members.id ASC LIMIT 20 OFFSET ?", CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, conversationID, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -4321,7 +3933,7 @@ func showEditGroupChat(w http.ResponseWriter, r *http.Request) {
 	}
 	member_rows.Close()
 
-	friend_rows, err := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM friendships LEFT JOIN users ON users.id = if(source = ?, target, source) LEFT JOIN profiles ON user = users.id WHERE (source = ? or target = ?) AND (group_permissions = 0 OR (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = user) > 0) AND NOT EXISTS (SELECT user FROM group_members WHERE user = users.id AND conversation = ?) ORDER BY friendships.id DESC LIMIT 20 OFFSET ?", currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, conversationID, offset)
+	friend_rows, err := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM friendships LEFT JOIN users ON users.id = if(source = ?, target, source) LEFT JOIN profiles ON user = users.id WHERE (source = ? or target = ?) AND (group_permissions = 0 OR (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = user) > 0) AND NOT EXISTS (SELECT user FROM group_members WHERE user = users.id AND conversation = ?) ORDER BY friendships.id DESC LIMIT 20 OFFSET ?", CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, conversationID, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -4343,15 +3955,15 @@ func showEditGroupChat(w http.ResponseWriter, r *http.Request) {
 	friend_rows.Close()
 
 	var byMe bool
-	db.QueryRow("SELECT COUNT(*) FROM conversations WHERE id = ? AND source = ?", conversationID, currentUser.ID).Scan(&byMe)
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	db.QueryRow("SELECT COUNT(*) FROM conversations WHERE id = ? AND source = ?", conversationID, CurrentUser.ID).Scan(&byMe)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 	offset += 20
 
 	var data = map[string]interface{}{
 		"Title":          "Edit Group Chat",
 		"Pjax":           pjax,
 		"Offset":         offset,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -4368,19 +3980,14 @@ func showEditGroupChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show the FAQ page.
-func showFAQPage(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showFAQPage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	pjax := r.Header.Get("X-PJAX") == ""
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          "Frequently Asked Questions (FAQ)",
 		"Pjax":           pjax,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -4393,24 +4000,19 @@ func showFAQPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a user's favorite communities.
-func showFavorites(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showFavorites(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	vars := mux.Vars(r)
 	username := vars["username"]
-	users := QueryUser(username, currentUser.Timezone)
-	if len(users.Username) == 0 || checkIfBlocked(users.ID, currentUser.ID) {
-		handle404(w, r)
+	users := QueryUser(username, CurrentUser.Timezone)
+	if len(users.Username) == 0 || checkIfBlocked(users.ID, CurrentUser.ID) {
+		handle404(w, r, CurrentUser)
 		return
 	}
 	users.Avatar = getAvatar(users.Avatar, users.HasMii, 0)
 	pjax := r.Header.Get("X-PJAX") == ""
 
-	sidebar := setupProfileSidebar(users, currentUser, "favorites")
+	sidebar := setupProfileSidebar(users, CurrentUser, "favorites")
 
 	favorite_rows, err := db.Query("SELECT communities.id, title, icon FROM communities LEFT JOIN community_favorites ON communities.id = community WHERE favorite_by = ? ORDER BY community_favorites.id DESC LIMIT 20 OFFSET ?", users.ID, offset)
 	if err != nil {
@@ -4438,7 +4040,7 @@ func showFavorites(w http.ResponseWriter, r *http.Request) {
 		"Title":       users.Nickname + "'s Favorite Communities",
 		"Pjax":        pjax,
 		"Offset":      offset,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"User":        users,
 		"Sidebar":     sidebar,
 		"Users":       favorites,
@@ -4450,23 +4052,18 @@ func showFavorites(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a user's followers.
-func showFollowers(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showFollowers(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	vars := mux.Vars(r)
 	username := vars["username"]
-	users := QueryUser(username, currentUser.Timezone)
-	if len(users.Username) == 0 || checkIfBlocked(users.ID, currentUser.ID) {
-		handle404(w, r)
+	users := QueryUser(username, CurrentUser.Timezone)
+	if len(users.Username) == 0 || checkIfBlocked(users.ID, CurrentUser.ID) {
+		handle404(w, r, CurrentUser)
 		return
 	}
 	users.Avatar = getAvatar(users.Avatar, users.HasMii, 0)
 	pjax := r.Header.Get("X-PJAX") == ""
-	sidebar := setupProfileSidebar(users, currentUser, "followers")
+	sidebar := setupProfileSidebar(users, CurrentUser, "followers")
 
 	follower_rows, _ := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM follows LEFT JOIN users ON users.id = follow_by LEFT JOIN profiles ON user = users.id WHERE follow_to = ? ORDER BY follows.id DESC LIMIT 20 OFFSET ?", users.ID, offset)
 	var followers []user
@@ -4496,7 +4093,7 @@ func showFollowers(w http.ResponseWriter, r *http.Request) {
 		"Title":       users.Nickname + "'s Followers",
 		"Pjax":        pjax,
 		"Offset":      offset,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"User":        users,
 		"Sidebar":     sidebar,
 		"Users":       followers,
@@ -4508,24 +4105,19 @@ func showFollowers(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show who a user is following.
-func showFollowing(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showFollowing(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	vars := mux.Vars(r)
 	username := vars["username"]
-	users := QueryUser(username, currentUser.Timezone)
-	if len(users.Username) == 0 || checkIfBlocked(users.ID, currentUser.ID) {
-		handle404(w, r)
+	users := QueryUser(username, CurrentUser.Timezone)
+	if len(users.Username) == 0 || checkIfBlocked(users.ID, CurrentUser.ID) {
+		handle404(w, r, CurrentUser)
 		return
 	}
 	users.Avatar = getAvatar(users.Avatar, users.HasMii, 0)
 	pjax := r.Header.Get("X-PJAX") == ""
 
-	sidebar := setupProfileSidebar(users, currentUser, "following")
+	sidebar := setupProfileSidebar(users, CurrentUser, "following")
 
 	follower_rows, _ := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM follows LEFT JOIN users ON users.id = follow_to LEFT JOIN profiles ON user = users.id WHERE follow_by = ? ORDER BY follows.id DESC LIMIT 20 OFFSET ?", users.ID, offset)
 	var following []user
@@ -4555,7 +4147,7 @@ func showFollowing(w http.ResponseWriter, r *http.Request) {
 		"Title":       "Users " + users.Nickname + " is Following",
 		"Pjax":        pjax,
 		"Offset":      offset,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"User":        users,
 		"Sidebar":     sidebar,
 		"Users":       following,
@@ -4569,21 +4161,13 @@ func showFollowing(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a user's friend requests.
-func showFriendRequests(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
-
+func showFriendRequests(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	var notify bool
 	pjax := r.Header.Get("X-PJAX") == ""
 
-	db.QueryRow("SELECT IF(COUNT(*) > 0, 1, 0) FROM notifications WHERE notif_to = ? AND merged IS NULL AND notif_read = 0", currentUser.ID).Scan(&notify)
+	db.QueryRow("SELECT IF(COUNT(*) > 0, 1, 0) FROM notifications WHERE notif_to = ? AND merged IS NULL AND notif_read = 0", CurrentUser.ID).Scan(&notify)
 
-	request_rows, err := db.Query("SELECT friend_requests.id, message, created_at, request_read, username, nickname, avatar, has_mh, online, hide_online, color, role FROM friend_requests INNER JOIN users ON users.id = request_by WHERE request_to = ? ORDER BY friend_requests.id DESC", &currentUser.ID)
+	request_rows, err := db.Query("SELECT friend_requests.id, message, created_at, request_read, username, nickname, avatar, has_mh, online, hide_online, color, role FROM friend_requests INNER JOIN users ON users.id = request_by WHERE request_to = ? ORDER BY friend_requests.id DESC", &CurrentUser.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -4606,20 +4190,20 @@ func showFriendRequests(w http.ResponseWriter, r *http.Request) {
 		}
 		row.CreatedAt = timestamp.Format("01/02/2006 3:04 PM")
 		row.CreatedAtUnix = timestamp.Unix()
-		row.Date = humanTiming(timestamp, currentUser.Timezone)
+		row.Date = humanTiming(timestamp, CurrentUser.Timezone)
 
 		requests = append(requests, row)
 	}
 	request_rows.Close()
 
 	stmt, _ := db.Prepare("UPDATE friend_requests SET request_read = 1 WHERE request_to = ?")
-	stmt.Exec(&currentUser.ID)
+	stmt.Exec(&CurrentUser.ID)
 	stmt.Close()
 	var msg wsMessage
 	msg.Type = "notif"
-	db.QueryRow("SELECT COUNT(*) FROM notifications WHERE notif_to = ? AND merged IS NULL AND notif_read = 0", currentUser.ID).Scan(&msg.Content)
+	db.QueryRow("SELECT COUNT(*) FROM notifications WHERE notif_to = ? AND merged IS NULL AND notif_read = 0", CurrentUser.ID).Scan(&msg.Content)
 	for client := range clients {
-		if clients[client].UserID == currentUser.ID {
+		if clients[client].UserID == CurrentUser.ID {
 			err := writeWs(clients[client], client, msg)
 			if err != nil {
 				client.Close()
@@ -4628,12 +4212,12 @@ func showFriendRequests(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          "Friend Requests",
 		"Pjax":           pjax,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"Notify":         notify,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
@@ -4647,24 +4231,19 @@ func showFriendRequests(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a user's friends.
-func showFriends(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showFriends(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	vars := mux.Vars(r)
 	username := vars["username"]
-	users := QueryUser(username, currentUser.Timezone)
-	if len(users.Username) == 0 || checkIfBlocked(users.ID, currentUser.ID) {
-		handle404(w, r)
+	users := QueryUser(username, CurrentUser.Timezone)
+	if len(users.Username) == 0 || checkIfBlocked(users.ID, CurrentUser.ID) {
+		handle404(w, r, CurrentUser)
 		return
 	}
 	users.Avatar = getAvatar(users.Avatar, users.HasMii, 0)
 	pjax := r.Header.Get("X-PJAX") == ""
 
-	sidebar := setupProfileSidebar(users, currentUser, "friends")
+	sidebar := setupProfileSidebar(users, CurrentUser, "friends")
 
 	friend_rows, _ := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM friendships LEFT JOIN users ON users.id = if(source = ?, target, source) LEFT JOIN profiles ON user = users.id WHERE source = ? or target = ? ORDER BY friendships.id DESC LIMIT 20 OFFSET ?", users.ID, users.ID, users.ID, offset)
 	var friends []user
@@ -4694,7 +4273,7 @@ func showFriends(w http.ResponseWriter, r *http.Request) {
 		"Title":       users.Nickname + "'s Friends",
 		"Pjax":        pjax,
 		"Offset":      offset,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"User":        users,
 		"Sidebar":     sidebar,
 		"Users":       friends,
@@ -4706,38 +4285,34 @@ func showFriends(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a group chat.
-func showGroupChat(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
-
+func showGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
+	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
+	if err != nil {
+		offsetTime = time.Now().Unix()
+	}
 	query := r.URL.Query().Get("q")
 	id := vars["id"]
 
 	var source int
 	var target int
-	err := db.QueryRow("SELECT source, target FROM conversations WHERE id = ?", id).Scan(&source, &target)
+	err = db.QueryRow("SELECT source, target FROM conversations WHERE id = ?", id).Scan(&source, &target)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if source == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 	if target != 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
-	message_rows, err := db.Query("SELECT messages.id, created_at, created_by, feeling, body, image, attachment_type, url, url_type, post_type, username, avatar, has_mh, online, hide_online, color, role FROM messages LEFT JOIN users ON users.id = created_by WHERE conversation_id = ? AND is_rm = 0 AND body LIKE CONCAT('%', ?, '%') ORDER BY messages.id DESC LIMIT 20 OFFSET ?", id, query, offset)
+	message_rows, err := db.Query("SELECT messages.id, created_at, created_by, feeling, body, image, attachment_type, url, url_type, post_type, username, avatar, has_mh, online, hide_online, color, role FROM messages LEFT JOIN users ON users.id = created_by WHERE conversation_id = ? AND UNIX_TIMESTAMP(created_at) <= ? AND is_rm = 0 AND body LIKE CONCAT('%', ?, '%') ORDER BY messages.id DESC LIMIT 20 OFFSET ?", id, offsetTime, query, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -4761,11 +4336,11 @@ func showGroupChat(w http.ResponseWriter, r *http.Request) {
 			row.ByRoleImage = getRoleImage(role)
 		}
 
-		row.Date = humanTiming(timestamp, currentUser.Timezone)
+		row.Date = humanTiming(timestamp, CurrentUser.Timezone)
 		row.DateUnix = timestamp.Unix()
 		row.Body = parseBody(row.BodyText, false, true)
 
-		if createdBy == currentUser.ID {
+		if createdBy == CurrentUser.ID {
 			row.ByMe = true
 		}
 
@@ -4774,7 +4349,7 @@ func showGroupChat(w http.ResponseWriter, r *http.Request) {
 	message_rows.Close()
 
 	var users []string
-	user_rows, err := db.Query("SELECT nickname FROM group_members LEFT JOIN users ON user = users.id WHERE conversation = ? AND user != ? ORDER BY nickname ASC", id, currentUser.ID)
+	user_rows, err := db.Query("SELECT nickname FROM group_members LEFT JOIN users ON user = users.id WHERE conversation = ? AND user != ? ORDER BY nickname ASC", id, CurrentUser.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -4787,23 +4362,24 @@ func showGroupChat(w http.ResponseWriter, r *http.Request) {
 	user_rows.Close()
 	title := getGroupName(users)
 
-	_, err = db.Exec("UPDATE group_members SET unread_messages = 0 WHERE conversation = ? AND user = ?", id, currentUser.ID)
+	_, err = db.Exec("UPDATE group_members SET unread_messages = 0 WHERE conversation = ? AND user = ?", id, CurrentUser.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	offset += 20
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          title,
 		"Offset":         offset,
+		"OffsetTime":     offsetTime,
 		"Pjax":           pjax,
 		"Query":          query,
 		"ConversationID": id,
 		"IsGroupChat":    true,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -4818,11 +4394,11 @@ func showGroupChat(w http.ResponseWriter, r *http.Request) {
 	var msg wsMessage
 	msg.Type = "messageNotif"
 	var unread int
-	db.QueryRow("SELECT COUNT(*) FROM messages LEFT JOIN conversations ON conversation_id = conversations.id WHERE (source = ? OR target = ?) AND created_by <> ? AND msg_read = 0 AND messages.is_rm = 0 AND conversations.is_rm = 0", &currentUser.ID, &currentUser.ID, &currentUser.ID).Scan(&unread)
+	db.QueryRow("SELECT COUNT(*) FROM messages LEFT JOIN conversations ON conversation_id = conversations.id WHERE (source = ? OR target = ?) AND created_by <> ? AND msg_read = 0 AND messages.is_rm = 0 AND conversations.is_rm = 0", &CurrentUser.ID, &CurrentUser.ID, &CurrentUser.ID).Scan(&unread)
 	var groupUnread int
-	db.QueryRow("SELECT SUM(unread_messages) FROM group_members WHERE user = ?", currentUser.ID).Scan(&groupUnread)
+	db.QueryRow("SELECT SUM(unread_messages) FROM group_members WHERE user = ?", CurrentUser.ID).Scan(&groupUnread)
 	for client := range clients {
-		if clients[client].UserID == currentUser.ID {
+		if clients[client].UserID == CurrentUser.ID {
 			err := writeWs(clients[client], client, msg)
 			if err != nil {
 				client.Close()
@@ -4833,19 +4409,15 @@ func showGroupChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show the legal information page.
-func showLegalPage(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
+func showLegalPage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	pjax := r.Header.Get("X-PJAX") == ""
 
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          "Legal Information",
 		"Pjax":           pjax,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -4858,18 +4430,15 @@ func showLegalPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a user's messages.
-func showMessages(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
+func showMessages(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
+	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
+	if err != nil {
+		offsetTime = time.Now().Unix()
+	}
 
-	conversation_rows, err := db.Query("SELECT conversations.id, target, IFNULL(created_by, if(source = ?, target, source)), IFNULL(messages.created_at, conversations.created_at) lastdate, IFNULL(body, ''), IFNULL(image, ''), IFNULL(post_type, 0), IFNULL(msg_read, 1), IFNULL(username, conversations.id), IFNULL(nickname, ''), IFNULL(avatar, ''), IFNULL(has_mh, 0), IFNULL(online, 0), IFNULL(hide_online, 1), IFNULL(color, ''), IFNULL(role, 0) FROM conversations LEFT JOIN messages ON messages.id = (SELECT MAX(id) FROM messages WHERE messages.conversation_id = conversations.id AND is_rm = 0) LEFT JOIN users ON if(source = ?, target, source) = users.id LEFT JOIN group_members ON conversations.id = conversation WHERE (source = ? OR target = ? OR user = ?) AND conversations.is_rm = 0 GROUP BY conversations.id, messages.id, users.id ORDER BY lastdate DESC LIMIT 20 OFFSET ?", currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, offset)
+	conversation_rows, err := db.Query("SELECT conversations.id, target, IFNULL(created_by, if(source = ?, target, source)), IFNULL(messages.created_at, conversations.created_at) lastdate, IFNULL(body, ''), IFNULL(image, ''), IFNULL(post_type, 0), IFNULL(msg_read, 1), IFNULL(username, conversations.id), IFNULL(nickname, ''), IFNULL(avatar, ''), IFNULL(has_mh, 0), IFNULL(online, 0), IFNULL(hide_online, 1), IFNULL(color, ''), IFNULL(role, 0) FROM conversations LEFT JOIN messages ON messages.id = (SELECT MAX(id) FROM messages WHERE messages.conversation_id = conversations.id AND is_rm = 0) LEFT JOIN users ON if(source = ?, target, source) = users.id LEFT JOIN group_members ON conversations.id = conversation WHERE (source = ? OR target = ? OR user = ?) AND conversations.is_rm = 0 GROUP BY conversations.id, messages.id, users.id ORDER BY lastdate DESC LIMIT 20 OFFSET ?", CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -4889,7 +4458,7 @@ func showMessages(w http.ResponseWriter, r *http.Request) {
 
 		if row.Target == 0 {
 			row.Username = strconv.Itoa(row.ID)
-			member_rows, err := db.Query("SELECT nickname FROM group_members LEFT JOIN users ON user = users.id WHERE conversation = ? AND user != ? ORDER BY nickname ASC", row.ID, currentUser.ID)
+			member_rows, err := db.Query("SELECT nickname FROM group_members LEFT JOIN users ON user = users.id WHERE conversation = ? AND user != ? ORDER BY nickname ASC", row.ID, CurrentUser.ID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -4903,7 +4472,7 @@ func showMessages(w http.ResponseWriter, r *http.Request) {
 			member_rows.Close()
 			row.Nickname = getGroupName(members)
 
-			err = db.QueryRow("SELECT IF(unread_messages > 0, 0, 1) FROM group_members WHERE conversation = ? AND user = ?", row.ID, currentUser.ID).Scan(&row.Read)
+			err = db.QueryRow("SELECT IF(unread_messages > 0, 0, 1) FROM group_members WHERE conversation = ? AND user = ?", row.ID, CurrentUser.ID).Scan(&row.Read)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -4919,7 +4488,7 @@ func showMessages(w http.ResponseWriter, r *http.Request) {
 		if role > 0 {
 			row.RoleImage = getRoleImage(role)
 		}
-		row.Date = humanTiming(timestamp, currentUser.Timezone)
+		row.Date = humanTiming(timestamp, CurrentUser.Timezone)
 		row.DateUnix = timestamp.Unix()
 
 		conversations = append(conversations, row)
@@ -4927,13 +4496,14 @@ func showMessages(w http.ResponseWriter, r *http.Request) {
 	conversation_rows.Close()
 
 	offset += 20
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          "Messages",
 		"Pjax":           pjax,
 		"Offset":         offset,
-		"CurrentUser":    currentUser,
+		"OffsetTime":     offsetTime,
+		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -4946,21 +4516,13 @@ func showMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show notifications.
-func showNotifications(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
-
+func showNotifications(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	var notify bool
 	pjax := r.Header.Get("X-PJAX") == ""
 
-	db.QueryRow("SELECT IF(COUNT(*) > 0, 1, 0) FROM friend_requests WHERE request_to = ? AND request_read = 0", currentUser.ID).Scan(&notify)
+	db.QueryRow("SELECT IF(COUNT(*) > 0, 1, 0) FROM friend_requests WHERE request_to = ? AND request_read = 0", CurrentUser.ID).Scan(&notify)
 
-	notif_rows, _ := db.Query("SELECT notifications.id, notif_type, notif_by, notif_post, notif_date, notif_read, username, nickname, avatar, has_mh, online, hide_online, color, role FROM notifications INNER JOIN users ON users.id = notifications.notif_by WHERE notif_to = ? AND merged IS NULL ORDER BY notif_date DESC LIMIT 50", currentUser.ID)
+	notif_rows, _ := db.Query("SELECT notifications.id, notif_type, notif_by, notif_post, notif_date, notif_read, username, nickname, avatar, has_mh, online, hide_online, color, role FROM notifications INNER JOIN users ON users.id = notifications.notif_by WHERE notif_to = ? AND merged IS NULL ORDER BY notif_date DESC LIMIT 50", CurrentUser.ID)
 	var notifs []*notification
 	for notif_rows.Next() {
 		var row = &notification{}
@@ -4974,7 +4536,7 @@ func showNotifications(w http.ResponseWriter, r *http.Request) {
 			row.ByRoleImage = getRoleImage(role)
 		}
 
-		row.Date = humanTiming(timestamp, currentUser.Timezone)
+		row.Date = humanTiming(timestamp, CurrentUser.Timezone)
 		row.DateUnix = timestamp.Unix()
 
 		if row.Type == 0 || row.Type == 2 || row.Type == 3 || row.Type == 7 {
@@ -5004,21 +4566,21 @@ func showNotifications(w http.ResponseWriter, r *http.Request) {
 		notifs = append(notifs, row)
 	}
 	notif_rows.Close()
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	if len(notifs) == 50 {
 		stmt, _ := db.Prepare("DELETE FROM notifications WHERE notif_to = ? AND id < ?")
-		stmt.Exec(currentUser.ID, notifs[len(notifs)-1].ID)
+		stmt.Exec(CurrentUser.ID, notifs[len(notifs)-1].ID)
 		stmt.Close()
 	}
 	stmt, _ := db.Prepare("UPDATE notifications SET notif_read = 1 WHERE notif_to = ?")
-	stmt.Exec(currentUser.ID)
+	stmt.Exec(CurrentUser.ID)
 	stmt.Close()
 
 	var data = map[string]interface{}{
 		"Title":          "Notifications",
 		"Pjax":           pjax,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"Notify":         notify,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
@@ -5032,9 +4594,9 @@ func showNotifications(w http.ResponseWriter, r *http.Request) {
 
 	var msg wsMessage
 	msg.Type = "notif"
-	db.QueryRow("SELECT COUNT(*) FROM friend_requests WHERE request_to = ? AND request_read = 0", currentUser.ID).Scan(&msg.Content)
+	db.QueryRow("SELECT COUNT(*) FROM friend_requests WHERE request_to = ? AND request_read = 0", CurrentUser.ID).Scan(&msg.Content)
 	for client := range clients {
-		if clients[client].UserID == currentUser.ID {
+		if clients[client].UserID == CurrentUser.ID {
 			err := writeWs(clients[client], client, msg)
 			if err != nil {
 				client.Close()
@@ -5045,17 +4607,12 @@ func showNotifications(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show popular posts.
-func showPopularPosts(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showPopularPosts(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	community_id := vars["id"]
 	communities := QueryCommunity(community_id, false)
 	if len(communities.Title) == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 	pjax := r.Header.Get("X-PJAX") == ""
@@ -5077,9 +4634,9 @@ func showPopularPosts(w http.ResponseWriter, r *http.Request) {
 	nextDate := dateParsed.AddDate(0, 0, -1).Format("2006-01-02")
 
 	var favoriteGiven bool
-	if len(currentUser.Username) > 0 {
+	if len(CurrentUser.Username) > 0 {
 		var favorited int
-		err = db.QueryRow("SELECT COUNT(*) FROM community_favorites WHERE community = ? AND favorite_by = ?", &community_id, &currentUser.ID).Scan(&favorited)
+		err = db.QueryRow("SELECT COUNT(*) FROM community_favorites WHERE community = ? AND favorite_by = ?", &community_id, &CurrentUser.ID).Scan(&favorited)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -5089,7 +4646,7 @@ func showPopularPosts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	post_rows, err := db.Query("SELECT posts.id, posts.created_by, posts.created_at, posts.edited_at, posts.feeling, posts.body, posts.image, posts.attachment_type, posts.is_spoiler, posts.post_type, posts.url, posts.url_type, posts.pinned, privacy, repost, username, nickname, avatar, has_mh, online, hide_online, color, role, (SELECT COUNT(*) FROM yeahs WHERE yeah_post = posts.id) + (SELECT COUNT(*) FROM comments WHERE post = posts.id AND is_rm = 0 AND is_rm_by_admin = 0) AS rating FROM posts INNER JOIN users ON users.id = created_by INNER JOIN yeahs ON yeah_post = posts.id LEFT JOIN comments ON post = comments.id WHERE community_id = ? AND cast(posts.created_at as date) = ? AND posts.is_rm = 0 AND posts.is_rm_by_admin = 0 AND migration = 0 AND (users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) OR ? > 0) AND IF(posts.created_by = ?, true, LOWER(posts.body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = posts.created_by OR source = posts.created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = posts.created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = posts.created_by) = 1) OR (privacy = 8 AND ? > 0) OR posts.created_by = ?) GROUP BY posts.id ORDER BY rating DESC LIMIT 25 OFFSET ?", community_id, dateParsed, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID, offset)
+	post_rows, err := db.Query("SELECT posts.id, posts.created_by, posts.created_at, posts.edited_at, posts.feeling, posts.body, posts.image, posts.attachment_type, posts.is_spoiler, posts.post_type, posts.url, posts.url_type, posts.pinned, privacy, repost, username, nickname, avatar, has_mh, online, hide_online, color, role, (SELECT COUNT(*) FROM yeahs WHERE yeah_post = posts.id) + (SELECT COUNT(*) FROM comments WHERE post = posts.id AND is_rm = 0 AND is_rm_by_admin = 0) AS rating FROM posts INNER JOIN users ON users.id = created_by INNER JOIN yeahs ON yeah_post = posts.id LEFT JOIN comments ON post = comments.id WHERE community_id = ? AND cast(posts.created_at as date) = ? AND posts.is_rm = 0 AND posts.is_rm_by_admin = 0 AND migration = 0 AND (users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) OR ? > 0) AND IF(posts.created_by = ?, true, LOWER(posts.body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = posts.created_by OR source = posts.created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = posts.created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = posts.created_by) = 1) OR (privacy = 8 AND ? > 0) OR posts.created_by = ?) GROUP BY posts.id ORDER BY rating DESC LIMIT 25 OFFSET ?", community_id, dateParsed, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -5105,7 +4662,7 @@ func showPopularPosts(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		row = setupPost(row, currentUser, 0, 0)
+		row = setupPost(row, CurrentUser, 0, 0)
 		posts = append(posts, row)
 	}
 	post_rows.Close()
@@ -5116,7 +4673,7 @@ func showPopularPosts(w http.ResponseWriter, r *http.Request) {
 		"Title":         communities.Title,
 		"Pjax":          pjax,
 		"Offset":        offset,
-		"CurrentUser":   currentUser,
+		"CurrentUser":   CurrentUser,
 		"Community":     communities,
 		"FavoriteGiven": favoriteGiven,
 		"PopularPosts":  true,
@@ -5133,20 +4690,15 @@ func showPopularPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a post.
-func showPost(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showPost(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	post_id := vars["id"]
 	pjax := r.Header.Get("X-PJAX") == ""
 
 	var posts = post{}
-	db.QueryRow("SELECT posts.id, created_by, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, url, url_type, pinned, privacy, repost, post_type, migration, migrated_id, migrated_community, is_rm_by_admin, username, nickname, avatar, has_mh, online, hide_online, color, role FROM posts LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?)", post_id, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID).Scan(&posts.ID, &posts.CreatedBy, &posts.CommunityID, &posts.CreatedAtTime, &posts.EditedAtTime, &posts.Feeling, &posts.BodyText, &posts.Image, &posts.AttachmentType, &posts.IsSpoiler, &posts.URL, &posts.URLType, &posts.Pinned, &posts.Privacy, &posts.RepostID, &posts.PostType, &posts.MigrationID, &posts.MigratedID, &posts.MigratedCommunity, &posts.IsRMByAdmin, &posts.PosterUsername, &posts.PosterNickname, &posts.PosterIcon, &posts.PosterHasMii, &posts.PosterOnline, &posts.PosterHideOnline, &posts.PosterColor, &posts.PosterRoleID)
+	db.QueryRow("SELECT posts.id, created_by, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, url, url_type, pinned, privacy, repost, post_type, migration, migrated_id, migrated_community, is_rm_by_admin, username, nickname, avatar, has_mh, online, hide_online, color, role FROM posts LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?)", post_id, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID).Scan(&posts.ID, &posts.CreatedBy, &posts.CommunityID, &posts.CreatedAtTime, &posts.EditedAtTime, &posts.Feeling, &posts.BodyText, &posts.Image, &posts.AttachmentType, &posts.IsSpoiler, &posts.URL, &posts.URLType, &posts.Pinned, &posts.Privacy, &posts.RepostID, &posts.PostType, &posts.MigrationID, &posts.MigratedID, &posts.MigratedCommunity, &posts.IsRMByAdmin, &posts.PosterUsername, &posts.PosterNickname, &posts.PosterIcon, &posts.PosterHasMii, &posts.PosterOnline, &posts.PosterHideOnline, &posts.PosterColor, &posts.PosterRoleID)
 	if len(posts.PosterUsername) == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
@@ -5157,10 +4709,10 @@ func showPost(w http.ResponseWriter, r *http.Request) {
 		posts.PosterRoleImage, posts.PosterRoleOrganization = getRoleImageAndOrganization(posts.PosterRoleID)
 	}
 
-	posts.CreatedAt = humanTiming(posts.CreatedAtTime, currentUser.Timezone)
+	posts.CreatedAt = humanTiming(posts.CreatedAtTime, CurrentUser.Timezone)
 	posts.CreatedAtUnix = posts.CreatedAtTime.Unix()
 	if posts.EditedAtTime.Sub(posts.CreatedAtTime).Minutes() > 5 {
-		posts.EditedAt = humanTiming(posts.EditedAtTime, currentUser.Timezone)
+		posts.EditedAt = humanTiming(posts.EditedAtTime, CurrentUser.Timezone)
 		posts.EditedAtUnix = posts.EditedAtTime.Unix()
 	}
 	if len(posts.MigratedID) == 0 || strings.Contains(posts.BodyText, ":markdown:") {
@@ -5170,24 +4722,24 @@ func showPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if posts.RepostID > 0 {
 		var repost post
-		db.QueryRow("SELECT posts.id, created_by, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, is_rm_by_admin, communities.id, title, icon, rm, username, nickname, avatar, has_mh, online, hide_online, color, role FROM posts LEFT JOIN communities ON communities.id = community_id LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) LIMIT 1", posts.RepostID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID).Scan(&repost.ID, &repost.CreatedBy, &repost.CreatedAtTime, &repost.EditedAtTime, &repost.Feeling, &repost.BodyText, &repost.Image, &repost.AttachmentType, &repost.IsSpoiler, &repost.PostType, &repost.URL, &repost.URLType, &repost.Pinned, &repost.Privacy, &repost.RepostID, &repost.MigrationID, &repost.MigratedID, &repost.MigratedCommunity, &repost.IsRMByAdmin, &repost.CommunityID, &repost.CommunityName, &repost.CommunityIcon, &repost.CommunityRM, &repost.PosterUsername, &repost.PosterNickname, &repost.PosterIcon, &repost.PosterHasMii, &repost.PosterOnline, &repost.PosterHideOnline, &repost.PosterColor, &repost.PosterRoleID)
+		db.QueryRow("SELECT posts.id, created_by, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, is_rm_by_admin, communities.id, title, icon, rm, username, nickname, avatar, has_mh, online, hide_online, color, role FROM posts LEFT JOIN communities ON communities.id = community_id LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) LIMIT 1", posts.RepostID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID).Scan(&repost.ID, &repost.CreatedBy, &repost.CreatedAtTime, &repost.EditedAtTime, &repost.Feeling, &repost.BodyText, &repost.Image, &repost.AttachmentType, &repost.IsSpoiler, &repost.PostType, &repost.URL, &repost.URLType, &repost.Pinned, &repost.Privacy, &repost.RepostID, &repost.MigrationID, &repost.MigratedID, &repost.MigratedCommunity, &repost.IsRMByAdmin, &repost.CommunityID, &repost.CommunityName, &repost.CommunityIcon, &repost.CommunityRM, &repost.PosterUsername, &repost.PosterNickname, &repost.PosterIcon, &repost.PosterHasMii, &repost.PosterOnline, &repost.PosterHideOnline, &repost.PosterColor, &repost.PosterRoleID)
 		posts.Repost = &repost
 		posts.Repost.Type = 3
 		if len(posts.Repost.CommunityName) > 0 {
-			posts.Repost = setupPost(posts.Repost, currentUser, 3, 0)
+			posts.Repost = setupPost(posts.Repost, CurrentUser, 3, 0)
 		}
 	}
 	if posts.PostType == 2 {
-		posts.Poll = getPoll(posts.ID, currentUser.ID)
+		posts.Poll = getPoll(posts.ID, CurrentUser.ID)
 	}
 	if posts.MigrationID > 0 {
 		posts.MigrationImage, posts.MigrationURL, community.Title, community.Icon = getPostMigration(posts.MigrationID, posts.MigratedCommunity)
 	}
-	posts.CanYeah = checkIfCanYeah(currentUser, posts.CreatedBy)
+	posts.CanYeah = checkIfCanYeah(CurrentUser, posts.CreatedBy)
 
 	var favoritePost string
 	isFavorite := false
-	db.QueryRow("SELECT favorite FROM profiles WHERE user = ?", currentUser.ID).Scan(&favoritePost)
+	db.QueryRow("SELECT favorite FROM profiles WHERE user = ?", CurrentUser.ID).Scan(&favoritePost)
 	if favoritePost == post_id {
 		isFavorite = true
 	}
@@ -5196,13 +4748,13 @@ func showPost(w http.ResponseWriter, r *http.Request) {
 	var pinnedComments []comment
 	var comments []comment
 	if !posts.IsRMByAdmin {
-		if len(currentUser.Username) > 0 {
-			db.QueryRow("SELECT COUNT(*) FROM yeahs WHERE yeah_post = ? AND yeah_by = ? AND on_comment = 0 LIMIT 1", posts.ID, currentUser.ID).Scan(&posts.Yeahed)
+		if len(CurrentUser.Username) > 0 {
+			db.QueryRow("SELECT COUNT(*) FROM yeahs WHERE yeah_post = ? AND yeah_by = ? AND on_comment = 0 LIMIT 1", posts.ID, CurrentUser.ID).Scan(&posts.Yeahed)
 		}
 		db.QueryRow("SELECT COUNT(*) FROM yeahs WHERE yeah_post = ? AND on_comment=0", post_id).Scan(&posts.YeahCount)
 		db.QueryRow("SELECT COUNT(*) FROM comments WHERE post = ? AND is_rm = 0", post_id).Scan(&posts.CommentCount)
 
-		yeah_rows, _ := db.Query("SELECT yeahs.id, username, avatar, has_mh, role FROM yeahs LEFT JOIN users ON users.id = yeah_by WHERE yeah_post = ? AND yeah_by != ? AND on_comment=0 ORDER BY yeahs.id DESC", post_id, currentUser.ID)
+		yeah_rows, _ := db.Query("SELECT yeahs.id, username, avatar, has_mh, role FROM yeahs LEFT JOIN users ON users.id = yeah_by WHERE yeah_post = ? AND yeah_by != ? AND on_comment=0 ORDER BY yeahs.id DESC", post_id, CurrentUser.ID)
 
 		for yeah_rows.Next() {
 			var row = yeah{}
@@ -5227,7 +4779,7 @@ func showPost(w http.ResponseWriter, r *http.Request) {
 		if offset < 0 {
 			offset = 0
 		}
-		comment_rows, _ := db.Query("SELECT comments.id, created_by, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, is_rm_by_admin, username, nickname, avatar, has_mh, online, hide_online, color, role FROM comments LEFT JOIN users ON users.id = created_by WHERE post = ? AND is_rm = 0 AND (users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) OR ? > 0) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) ORDER BY created_at ASC LIMIT 20 OFFSET ?", post_id, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), offset)
+		comment_rows, _ := db.Query("SELECT comments.id, created_by, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, is_rm_by_admin, username, nickname, avatar, has_mh, online, hide_online, color, role FROM comments LEFT JOIN users ON users.id = created_by WHERE post = ? AND is_rm = 0 AND (users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) OR ? > 0) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) ORDER BY created_at ASC LIMIT 20 OFFSET ?", post_id, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), offset)
 		for comment_rows.Next() {
 			var row = comment{}
 			var timestamp time.Time
@@ -5246,19 +4798,19 @@ func showPost(w http.ResponseWriter, r *http.Request) {
 				row.CommenterRoleImage = getRoleImage(role)
 			}
 
-			row.CreatedAt = humanTiming(timestamp, currentUser.Timezone)
+			row.CreatedAt = humanTiming(timestamp, CurrentUser.Timezone)
 			row.CreatedAtUnix = timestamp.Unix()
 			if editedAt.Sub(timestamp).Minutes() > 5 {
-				row.EditedAt = humanTiming(editedAt, currentUser.Timezone)
+				row.EditedAt = humanTiming(editedAt, CurrentUser.Timezone)
 				row.EditedAtUnix = editedAt.Unix()
 			}
 			row.Body = parseBody(row.BodyText, false, true)
 
 			row.ByMe = row.CreatedBy == posts.CreatedBy
-			row.ByMii = row.CreatedBy == currentUser.ID
-			row.CanYeah = checkIfCanYeah(currentUser, row.CreatedBy)
+			row.ByMii = row.CreatedBy == CurrentUser.ID
+			row.CanYeah = checkIfCanYeah(CurrentUser, row.CreatedBy)
 
-			db.QueryRow("SELECT 1 FROM yeahs WHERE yeah_post = ? AND yeah_by = ? AND on_comment = 1", row.ID, currentUser.ID).Scan(&row.Yeahed)
+			db.QueryRow("SELECT 1 FROM yeahs WHERE yeah_post = ? AND yeah_by = ? AND on_comment = 1", row.ID, CurrentUser.ID).Scan(&row.Yeahed)
 			db.QueryRow("SELECT COUNT(*) FROM yeahs WHERE yeah_post = ? AND on_comment = 1", row.ID).Scan(&row.YeahCount)
 
 			if row.Pinned {
@@ -5271,14 +4823,14 @@ func showPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isBlocked := false
-	if checkIfEitherBlocked(posts.CreatedBy, currentUser.ID) {
+	if checkIfEitherBlocked(posts.CreatedBy, CurrentUser.ID) {
 		isBlocked = true
 	}
 
 	var data = map[string]interface{}{
 		"Title":          posts.PosterNickname + "'s Post",
 		"Pjax":           pjax,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"Community":      community,
 		"Post":           posts,
 		"Yeahs":          yeahs,
@@ -5296,18 +4848,9 @@ func showPost(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a user's profile settings.
-func showProfileSettings(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func showProfileSettings(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	pjax := r.Header.Get("X-PJAX") == ""
-	sidebar := setupProfileSidebar(currentUser, currentUser, "settings")
+	sidebar := setupProfileSidebar(CurrentUser, CurrentUser, "settings")
 
 	migration_rows, err := db.Query("SELECT id, image, password_required FROM migrations WHERE is_rm = 0")
 	if err != nil {
@@ -5321,7 +4864,7 @@ func showProfileSettings(w http.ResponseWriter, r *http.Request) {
 		migrations = append(migrations, row)
 	}
 
-	import_rows, err := db.Query("SELECT imports.id, image, username FROM imports LEFT JOIN migrations ON migration = migrations.id WHERE user = ? ORDER BY id DESC", currentUser.ID)
+	import_rows, err := db.Query("SELECT imports.id, image, username FROM imports LEFT JOIN migrations ON migration = migrations.id WHERE user = ? ORDER BY id DESC", CurrentUser.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -5337,8 +4880,8 @@ func showProfileSettings(w http.ResponseWriter, r *http.Request) {
 	var data = map[string]interface{}{
 		"Title":       "Profile Settings",
 		"Pjax":        pjax,
-		"User":        currentUser,
-		"CurrentUser": currentUser,
+		"User":        CurrentUser,
+		"CurrentUser": CurrentUser,
 		"Profile":     sidebar.Profile,
 		"Sidebar":     sidebar,
 		"Migrations":  migrations,
@@ -5365,12 +4908,12 @@ func signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != "POST" {
-		var currentUser user
-		currentUser.CSRFToken = csrf.Token(r)
+		var CurrentUser user
+		CurrentUser.CSRFToken = csrf.Token(r)
 		pjax := r.Header.Get("X-PJAX") == ""
 		var data = map[string]interface{}{
 			"Title":       "Sign Up",
-			"CurrentUser": currentUser,
+			"CurrentUser": CurrentUser,
 			"Pjax":        pjax,
 			"ReCAPTCHA":   settings.ReCAPTCHA,
 		}
@@ -5549,7 +5092,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-				session := sessions.Start(w, r)
+				//session := sessions.Start(w, r)
 				session.Set("username", users.Username)
 				session.Set("user_id", users.ID)
 
@@ -5587,17 +5130,10 @@ func signup(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a user's recent communities.
-func showRecentCommunities(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
+func showRecentCommunities(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 
-	community_rows, err := db.Query("SELECT id, title, icon, id IN (SELECT DISTINCT community_id FROM posts WHERE created_by = ? AND is_rm = 0 AND migration = 0) AS recent FROM communities WHERE (rm = 0 OR id = 0) AND permissions <= ? ORDER BY recent DESC, id DESC LIMIT 20 OFFSET ?", currentUser.ID, currentUser.Level, offset)
+	community_rows, err := db.Query("SELECT id, title, icon, id IN (SELECT DISTINCT community_id FROM posts WHERE created_by = ? AND is_rm = 0 AND migration = 0) AS recent FROM communities WHERE (rm = 0 OR id = 0) AND permissions <= ? ORDER BY recent DESC, id DESC LIMIT 20 OFFSET ?", CurrentUser.ID, CurrentUser.Level, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -5629,12 +5165,7 @@ func showRecentCommunities(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show the "Reset Password" page.
-func showResetPassword(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showResetPassword(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	var data map[string]interface{}
 	if r.Method == "POST" {
 		email := r.FormValue("email")
@@ -5644,7 +5175,7 @@ func showResetPassword(w http.ResponseWriter, r *http.Request) {
 		if len(username) == 0 {
 			data = map[string]interface{}{
 				"Title":       "Reset Password",
-				"CurrentUser": currentUser,
+				"CurrentUser": CurrentUser,
 				"Action":      "error",
 				"Error":       "No user was found with that email address.",
 			}
@@ -5708,14 +5239,14 @@ func showResetPassword(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				data = map[string]interface{}{
 					"Title":       "Reset Password",
-					"CurrentUser": currentUser,
+					"CurrentUser": CurrentUser,
 					"Action":      "error",
 					"Error":       err.Error(),
 				}
 			} else {
 				data = map[string]interface{}{
 					"Title":       "Reset Password",
-					"CurrentUser": currentUser,
+					"CurrentUser": CurrentUser,
 					"Action":      "sent",
 					"Email":       email,
 				}
@@ -5725,7 +5256,7 @@ func showResetPassword(w http.ResponseWriter, r *http.Request) {
 		pjax := r.Header.Get("X-PJAX") == ""
 		data = map[string]interface{}{
 			"Title":       "Reset Password",
-			"CurrentUser": currentUser,
+			"CurrentUser": CurrentUser,
 			"Action":      "request",
 			"Pjax":        pjax,
 			"CSRFField":   csrf.TemplateField(r),
@@ -5734,7 +5265,7 @@ func showResetPassword(w http.ResponseWriter, r *http.Request) {
 		pjax := r.Header.Get("X-PJAX") == ""
 		data = map[string]interface{}{
 			"Title":       "Reset Password",
-			"CurrentUser": currentUser,
+			"CurrentUser": CurrentUser,
 			"Pjax":        pjax,
 			"Action":      "disabled",
 		}
@@ -5747,25 +5278,21 @@ func showResetPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show the rules page.
-func showRulesPage(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
+func showRulesPage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	pjax := r.Header.Get("X-PJAX") == ""
 
 	var friendCount int
 	var followingCount int
 	var followerCount int
 
-	db.QueryRow("SELECT COUNT(*) FROM friendships WHERE source = ? OR target = ?", currentUser.ID, currentUser.ID).Scan(&friendCount)
-	db.QueryRow("SELECT COUNT(*) FROM follows WHERE follow_by = ?", currentUser.ID).Scan(&followingCount)
-	db.QueryRow("SELECT COUNT(*) FROM follows WHERE follow_to = ?", currentUser.ID).Scan(&followerCount)
+	db.QueryRow("SELECT COUNT(*) FROM friendships WHERE source = ? OR target = ?", CurrentUser.ID, CurrentUser.ID).Scan(&friendCount)
+	db.QueryRow("SELECT COUNT(*) FROM follows WHERE follow_by = ?", CurrentUser.ID).Scan(&followingCount)
+	db.QueryRow("SELECT COUNT(*) FROM follows WHERE follow_to = ?", CurrentUser.ID).Scan(&followerCount)
 
 	var data = map[string]interface{}{
 		"Title":          "Indigo Rules",
 		"Pjax":           pjax,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -5778,25 +5305,20 @@ func showRulesPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a user page.
-func showUser(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showUser(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	username := vars["username"]
-	user := QueryUser(username, currentUser.Timezone)
-	if len(user.Username) == 0 || checkIfBlocked(user.ID, currentUser.ID) {
-		handle404(w, r)
+	user := QueryUser(username, CurrentUser.Timezone)
+	if len(user.Username) == 0 || checkIfBlocked(user.ID, CurrentUser.ID) {
+		handle404(w, r, CurrentUser)
 		return
 	}
 	userAvatarBackup := user.Avatar
 	user.Avatar = getAvatar(user.Avatar, user.HasMii, 0)
 	pjax := r.Header.Get("X-PJAX") == ""
-	sidebar := setupProfileSidebar(user, currentUser, "main")
+	sidebar := setupProfileSidebar(user, CurrentUser, "main")
 
-	post_rows, err := db.Query("SELECT posts.id, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, is_rm_by_admin, title, icon, rm FROM posts LEFT JOIN communities ON communities.id = community_id WHERE created_by = ? AND is_rm = 0 AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? < 0) OR created_by = ?) ORDER BY created_at DESC, posts.id DESC LIMIT 3", user.ID, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID)
+	post_rows, err := db.Query("SELECT posts.id, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, is_rm_by_admin, title, icon, rm FROM posts LEFT JOIN communities ON communities.id = community_id WHERE created_by = ? AND is_rm = 0 AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? < 0) OR created_by = ?) ORDER BY created_at DESC, posts.id DESC LIMIT 3", user.ID, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -5816,12 +5338,12 @@ func showUser(w http.ResponseWriter, r *http.Request) {
 		row.PosterHideOnline = user.HideOnline
 		row.PosterColor = user.Color
 		row.PosterRoleImage = user.Role.Image
-		row = setupPost(row, currentUser, -1, 2)
+		row = setupPost(row, CurrentUser, -1, 2)
 		posts = append(posts, row)
 	}
 	post_rows.Close()
 
-	yeah_rows, err := db.Query("SELECT posts.id, created_by, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, username, nickname, avatar, has_mh, online, hide_online, color, role, title, icon, rm FROM yeahs INNER JOIN posts ON posts.id = yeah_post INNER JOIN users ON users.id = posts.created_by INNER JOIN communities ON communities.id = community_id WHERE yeah_by = ? AND on_comment = 0 AND is_rm = 0 AND is_rm_by_admin = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) ORDER BY created_at DESC LIMIT 3", user.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID)
+	yeah_rows, err := db.Query("SELECT posts.id, created_by, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, username, nickname, avatar, has_mh, online, hide_online, color, role, title, icon, rm FROM yeahs INNER JOIN posts ON posts.id = yeah_post INNER JOIN users ON users.id = posts.created_by INNER JOIN communities ON communities.id = community_id WHERE yeah_by = ? AND on_comment = 0 AND is_rm = 0 AND is_rm_by_admin = 0 AND users.id NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = users.id) OR (source = users.id AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) ORDER BY created_at DESC LIMIT 3", user.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -5832,7 +5354,7 @@ func showUser(w http.ResponseWriter, r *http.Request) {
 		var row = &post{}
 
 		yeah_rows.Scan(&row.ID, &row.CreatedBy, &row.CommunityID, &row.CreatedAtTime, &row.EditedAtTime, &row.Feeling, &row.BodyText, &row.Image, &row.AttachmentType, &row.IsSpoiler, &row.PostType, &row.URL, &row.URLType, &row.Pinned, &row.Privacy, &row.RepostID, &row.MigrationID, &row.MigratedID, &row.MigratedCommunity, &row.PosterUsername, &row.PosterNickname, &row.PosterIcon, &row.PosterHasMii, &row.PosterOnline, &row.PosterHideOnline, &row.PosterColor, &row.PosterRoleID, &row.CommunityName, &row.CommunityIcon, &row.CommunityRM)
-		row = setupPost(row, currentUser, -1, 0)
+		row = setupPost(row, CurrentUser, -1, 0)
 		yeahs = append(yeahs, row)
 	}
 	yeah_rows.Close()
@@ -5840,7 +5362,7 @@ func showUser(w http.ResponseWriter, r *http.Request) {
 	var data = map[string]interface{}{
 		"Title":       user.Nickname + "'s Profile",
 		"Pjax":        pjax,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"User":        user,
 		"Sidebar":     sidebar,
 		"Posts":       posts,
@@ -5853,27 +5375,27 @@ func showUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show user comments
-func showUserComments(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showUserComments(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	username := vars["username"]
-	user := QueryUser(username, currentUser.Timezone)
-	if len(user.Username) == 0 || checkIfBlocked(user.ID, currentUser.ID) {
-		handle404(w, r)
+	user := QueryUser(username, CurrentUser.Timezone)
+	if len(user.Username) == 0 || checkIfBlocked(user.ID, CurrentUser.ID) {
+		handle404(w, r, CurrentUser)
 		return
 	}
 	userAvatarBackup := user.Avatar
 	user.Avatar = getAvatar(user.Avatar, user.HasMii, 0)
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
+	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
+	if err != nil {
+		offsetTime = time.Now().Unix()
+	}
+	
 	query := r.URL.Query().Get("q")
-	sidebar := setupProfileSidebar(user, currentUser, "comments")
+	sidebar := setupProfileSidebar(user, CurrentUser, "comments")
 
-	post_rows, err := db.Query("SELECT comments.id, post, comments.created_at, comments.edited_at, comments.feeling, comments.body, comments.image, comments.attachment_type, comments.is_spoiler, comments.post_type, comments.url, comments.url_type, comments.pinned, privacy, comments.is_rm_by_admin, nickname, avatar, has_mh, posts.is_rm FROM comments LEFT JOIN posts ON posts.id = post LEFT JOIN users ON posts.created_by = users.id WHERE comments.created_by = ? AND comments.is_rm = 0 AND comments.body LIKE CONCAT('%', ?, '%') AND IF(comments.created_by = ?, true, LOWER(comments.body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = posts.created_by OR source = posts.created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = posts.created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = posts.created_by) = 1) OR (privacy = 8 AND ? > 0) OR posts.created_by = ?) ORDER BY comments.id DESC LIMIT 50 OFFSET ?", user.ID, query, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID, offset)
+	post_rows, err := db.Query("SELECT comments.id, post, comments.created_at, comments.edited_at, comments.feeling, comments.body, comments.image, comments.attachment_type, comments.is_spoiler, comments.post_type, comments.url, comments.url_type, comments.pinned, privacy, comments.is_rm_by_admin, nickname, avatar, has_mh, posts.is_rm FROM comments LEFT JOIN posts ON posts.id = post LEFT JOIN users ON posts.created_by = users.id WHERE comments.created_by = ? AND UNIX_TIMESTAMP(comments.created_at) <= ? AND comments.is_rm = 0 AND comments.body LIKE CONCAT('%', ?, '%') AND IF(comments.created_by = ?, true, LOWER(comments.body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = posts.created_by OR source = posts.created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = posts.created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = posts.created_by) = 1) OR (privacy = 8 AND ? > 0) OR posts.created_by = ?) ORDER BY comments.id DESC LIMIT 50 OFFSET ?", user.ID, offsetTime, query, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -5899,7 +5421,7 @@ func showUserComments(w http.ResponseWriter, r *http.Request) {
 		row.PosterHideOnline = user.HideOnline
 		row.PosterColor = user.Color
 		row.PosterRoleImage = user.Role.Image
-		row = setupPost(row, currentUser, 1, 0)
+		row = setupPost(row, CurrentUser, 1, 0)
 		posts = append(posts, row)
 	}
 	post_rows.Close()
@@ -5910,8 +5432,9 @@ func showUserComments(w http.ResponseWriter, r *http.Request) {
 		"Title":       user.Nickname + "'s Comments",
 		"Pjax":        pjax,
 		"Offset":      offset,
+		"OffsetTime":  offsetTime,
 		"Query":       query,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"User":        user,
 		"Sidebar":     sidebar,
 		"Posts":       posts,
@@ -5923,27 +5446,26 @@ func showUserComments(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show a user's posts.
-func showUserPosts(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showUserPosts(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	username := vars["username"]
-	user := QueryUser(username, currentUser.Timezone)
-	if len(user.Username) == 0 || checkIfBlocked(user.ID, currentUser.ID) {
-		handle404(w, r)
+	user := QueryUser(username, CurrentUser.Timezone)
+	if len(user.Username) == 0 || checkIfBlocked(user.ID, CurrentUser.ID) {
+		handle404(w, r, CurrentUser)
 		return
 	}
 	userAvatarBackup := user.Avatar
 	user.Avatar = getAvatar(user.Avatar, user.HasMii, 0)
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
+	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
+	if err != nil {
+		offsetTime = time.Now().Unix()
+	}
 	query := r.URL.Query().Get("q")
-	sidebar := setupProfileSidebar(user, currentUser, "posts")
+	sidebar := setupProfileSidebar(user, CurrentUser, "posts")
 
-	post_rows, err := db.Query("SELECT posts.id, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, is_rm_by_admin, title, icon, rm FROM posts LEFT JOIN communities ON communities.id = community_id WHERE created_by = ? AND is_rm = 0 AND body LIKE CONCAT('%', ?, '%') AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) ORDER BY created_at DESC, posts.id DESC LIMIT 50 OFFSET ?", user.ID, query, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID, offset)
+	post_rows, err := db.Query("SELECT posts.id, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, is_rm_by_admin, title, icon, rm FROM posts LEFT JOIN communities ON communities.id = community_id WHERE created_by = ? AND UNIX_TIMESTAMP(created_at) <= ? AND is_rm = 0 AND body LIKE CONCAT('%', ?, '%') AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) ORDER BY created_at DESC, posts.id DESC LIMIT 50 OFFSET ?", user.ID, offsetTime, query, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -5967,7 +5489,7 @@ func showUserPosts(w http.ResponseWriter, r *http.Request) {
 		row.PosterHideOnline = user.HideOnline
 		row.PosterColor = user.Color
 		row.PosterRoleImage = user.Role.Image
-		row = setupPost(row, currentUser, 1, 0)
+		row = setupPost(row, CurrentUser, 1, 0)
 		posts = append(posts, row)
 	}
 	post_rows.Close()
@@ -5977,8 +5499,9 @@ func showUserPosts(w http.ResponseWriter, r *http.Request) {
 		"Title":       user.Nickname + "'s Posts",
 		"Pjax":        pjax,
 		"Offset":      offset,
+		"OffsetTime":  offsetTime,
 		"Query":       query,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"User":        user,
 		"Sidebar":     sidebar,
 		"Posts":       posts,
@@ -5990,19 +5513,11 @@ func showUserPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 // Search for users.
-func showUserSearch(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-	}
-
+func showUserSearch(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	query := vars["username"]
 	if len(query) == 0 || utf8.RuneCountInString(query) > 32 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 	pjax := r.Header.Get("X-PJAX") == ""
@@ -6035,12 +5550,12 @@ func showUserSearch(w http.ResponseWriter, r *http.Request) {
 	user_rows.Close()
 	offset += 20
 
-	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
+	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          "Search Users",
 		"Pjax":           pjax,
-		"CurrentUser":    currentUser,
+		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -6057,17 +5572,12 @@ func showUserSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // Show user yeahs
-func showUserYeahs(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-
+func showUserYeahs(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	username := vars["username"]
-	user := QueryUser(username, currentUser.Timezone)
-	if len(user.Username) == 0 || checkIfBlocked(user.ID, currentUser.ID) {
-		handle404(w, r)
+	user := QueryUser(username, CurrentUser.Timezone)
+	if len(user.Username) == 0 || checkIfBlocked(user.ID, CurrentUser.ID) {
+		handle404(w, r, CurrentUser)
 		return
 	}
 	user.Avatar = getAvatar(user.Avatar, user.HasMii, 0)
@@ -6075,9 +5585,9 @@ func showUserYeahs(w http.ResponseWriter, r *http.Request) {
 	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	query := r.URL.Query().Get("q")
-	sidebar := setupProfileSidebar(user, currentUser, "yeahs")
+	sidebar := setupProfileSidebar(user, CurrentUser, "yeahs")
 
-	post_rows, err := db.Query("SELECT posts.id, created_by, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, is_rm, is_rm_by_admin, username, nickname, avatar, has_mh, online, hide_online, color, role, title, icon, rm, source_identifier, type FROM (SELECT posts.id, posts.created_by, posts.community_id, posts.created_at, posts.edited_at, posts.feeling, posts.body, posts.image, posts.attachment_type, posts.is_spoiler, posts.post_type, posts.url, posts.url_type, posts.pinned, posts.privacy, repost, migration, migrated_id, migrated_community, is_rm, is_rm_by_admin, users.username, users.nickname, users.avatar, users.has_mh, users.online, users.hide_online, users.color, users.role, title, icon, rm, 0 source_identifier, 0 type FROM posts LEFT JOIN users ON posts.created_by = users.id LEFT JOIN communities ON community_id = communities.id UNION SELECT comments.id, comments.created_by, post, comments.created_at, comments.edited_at, comments.feeling, comments.body, comments.image, comments.attachment_type, comments.is_spoiler, comments.post_type, comments.url, comments.url_type, comments.pinned, op.privacy, 0, 0, 0, 0, comments.is_rm, comments.is_rm_by_admin, creator.username, creator.nickname, creator.avatar, creator.has_mh, creator.online, creator.hide_online, creator.color, creator.role, poster.nickname, poster.avatar, op.is_rm, poster.has_mh, 1 FROM comments LEFT JOIN posts AS op ON post = op.id LEFT JOIN users AS creator ON comments.created_by = creator.id LEFT JOIN users AS poster ON op.created_by = poster.id) posts LEFT JOIN yeahs ON yeah_post = posts.id WHERE yeah_by = ? AND on_comment = type AND body LIKE CONCAT('%', ?, '%') AND is_rm = 0 AND is_rm_by_admin = 0 AND created_by NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = created_by) OR (source = created_by AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) ORDER BY yeahs.id DESC LIMIT 25 OFFSET ?", user.ID, query, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, escapeForbiddenKeywords(currentUser.ForbiddenKeywords), currentUser.ID, currentUser.ID, currentUser.ID, currentUser.ID, currentUser.Level, currentUser.ID, offset)
+	post_rows, err := db.Query("SELECT posts.id, created_by, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, is_rm, is_rm_by_admin, username, nickname, avatar, has_mh, online, hide_online, color, role, title, icon, rm, source_identifier, type FROM (SELECT posts.id, posts.created_by, posts.community_id, posts.created_at, posts.edited_at, posts.feeling, posts.body, posts.image, posts.attachment_type, posts.is_spoiler, posts.post_type, posts.url, posts.url_type, posts.pinned, posts.privacy, repost, migration, migrated_id, migrated_community, is_rm, is_rm_by_admin, users.username, users.nickname, users.avatar, users.has_mh, users.online, users.hide_online, users.color, users.role, title, icon, rm, 0 source_identifier, 0 type FROM posts LEFT JOIN users ON posts.created_by = users.id LEFT JOIN communities ON community_id = communities.id UNION SELECT comments.id, comments.created_by, post, comments.created_at, comments.edited_at, comments.feeling, comments.body, comments.image, comments.attachment_type, comments.is_spoiler, comments.post_type, comments.url, comments.url_type, comments.pinned, op.privacy, 0, 0, 0, 0, comments.is_rm, comments.is_rm_by_admin, creator.username, creator.nickname, creator.avatar, creator.has_mh, creator.online, creator.hide_online, creator.color, creator.role, poster.nickname, poster.avatar, op.is_rm, poster.has_mh, 1 FROM comments LEFT JOIN posts AS op ON post = op.id LEFT JOIN users AS creator ON comments.created_by = creator.id LEFT JOIN users AS poster ON op.created_by = poster.id) posts LEFT JOIN yeahs ON yeah_post = posts.id WHERE yeah_by = ? AND on_comment = type AND body LIKE CONCAT('%', ?, '%') AND is_rm = 0 AND is_rm_by_admin = 0 AND created_by NOT IN (SELECT if(source = ?, target, source) FROM blocks WHERE (source = ? AND target = created_by) OR (source = created_by AND target = ?)) AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?) ORDER BY yeahs.id DESC LIMIT 25 OFFSET ?", user.ID, query, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -6100,7 +5610,7 @@ func showUserYeahs(w http.ResponseWriter, r *http.Request) {
 			row.CommunityName = "Comment on " + row.CommunityName + "'s Post"
 			row.CommentCount = -1
 		}
-		row = setupPost(row, currentUser, 1, 0)
+		row = setupPost(row, CurrentUser, 1, 0)
 		posts = append(posts, row)
 	}
 	post_rows.Close()
@@ -6112,7 +5622,7 @@ func showUserYeahs(w http.ResponseWriter, r *http.Request) {
 		"Pjax":        pjax,
 		"Offset":      offset,
 		"Query":       query,
-		"CurrentUser": currentUser,
+		"CurrentUser": CurrentUser,
 		"User":        user,
 		"Sidebar":     sidebar,
 		"Posts":       posts,
@@ -6124,33 +5634,24 @@ func showUserYeahs(w http.ResponseWriter, r *http.Request) {
 }
 
 // Unblock a user.
-func unblockUser(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func unblockUser(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 
 	username := vars["username"]
 
-	if username != currentUser.Username {
+	if username != CurrentUser.Username {
 		var user_id int
 		var usern string
 		db.QueryRow("SELECT id, username FROM users WHERE username = ?", username).Scan(&user_id, &usern)
 		if len(usern) == 0 {
-			handle404(w, r)
+			handle404(w, r, CurrentUser)
 			return
 		}
 
 		stmt, err := db.Prepare("DELETE FROM blocks WHERE source = ? AND target = ?")
 		if err == nil {
 			// If there's no errors, we can go ahead and execute the statement.
-			_, err := stmt.Exec(&currentUser.ID, &user_id)
+			_, err := stmt.Exec(&CurrentUser.ID, &user_id)
 			stmt.Close()
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -6160,7 +5661,7 @@ func unblockUser(w http.ResponseWriter, r *http.Request) {
 
 		var msg wsMessage
 		msg.Type = "unblock"
-		msg.Content = currentUser.Username
+		msg.Content = CurrentUser.Username
 		for client := range clients {
 			if clients[client].UserID == user_id {
 				err := writeWs(clients[client], client, msg)
@@ -6174,27 +5675,18 @@ func unblockUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // Unfavorite a post.
-func unfavoritePost(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func unfavoritePost(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	post_id := vars["id"]
 
 	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM profiles WHERE favorite = ? AND user = ?", post_id, currentUser.ID).Scan(&count)
+	err := db.QueryRow("SELECT COUNT(*) FROM profiles WHERE favorite = ? AND user = ?", post_id, CurrentUser.ID).Scan(&count)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if count == 0 {
-		handle404(w, r)
+		handle404(w, r, CurrentUser)
 		return
 	}
 
@@ -6203,7 +5695,7 @@ func unfavoritePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_, err = stmt.Exec(&currentUser.ID)
+	_, err = stmt.Exec(&CurrentUser.ID)
 	stmt.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -6402,16 +5894,7 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 }
 
 // Vote on a poll.
-func voteOnPoll(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-
+func voteOnPoll(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	postID := vars["id"]
 	optionID := r.FormValue("option")
@@ -6429,13 +5912,13 @@ func voteOnPoll(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		option_id := -1
-		db.QueryRow("SELECT option_id FROM votes WHERE poll = ? AND user = ?", postID, currentUser.ID).Scan(&option_id)
+		db.QueryRow("SELECT option_id FROM votes WHERE poll = ? AND user = ?", postID, CurrentUser.ID).Scan(&option_id)
 		if option_id != -1 {
-			db.Exec("UPDATE votes SET option_id = ? WHERE poll = ? AND user = ?", optionID, postID, currentUser.ID)
+			db.Exec("UPDATE votes SET option_id = ? WHERE poll = ? AND user = ?", optionID, postID, CurrentUser.ID)
 			msg.Type = "pollChange"
 			msg.Content = strconv.Itoa(option_id)
 		} else {
-			_, err = db.Exec("INSERT INTO votes (option_id, user, poll) VALUES (?, ?, ?)", optionID, currentUser.ID, postID)
+			_, err = db.Exec("INSERT INTO votes (option_id, user, poll) VALUES (?, ?, ?)", optionID, CurrentUser.ID, postID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -6444,18 +5927,18 @@ func voteOnPoll(w http.ResponseWriter, r *http.Request) {
 		}
 		msg.ID = optionID
 	} else {
-		db.QueryRow("SELECT COUNT(*) FROM votes WHERE poll = ? AND user = ?", postID, currentUser.ID).Scan(&count)
+		db.QueryRow("SELECT COUNT(*) FROM votes WHERE poll = ? AND user = ?", postID, CurrentUser.ID).Scan(&count)
 		if count == 0 {
 			return
 		} else {
-			db.QueryRow("SELECT option_id FROM votes WHERE poll = ? AND user = ?", postID, currentUser.ID).Scan(&msg.ID)
-			db.Exec("DELETE FROM votes WHERE poll = ? AND user = ?", postID, currentUser.ID)
+			db.QueryRow("SELECT option_id FROM votes WHERE poll = ? AND user = ?", postID, CurrentUser.ID).Scan(&msg.ID)
+			db.Exec("DELETE FROM votes WHERE poll = ? AND user = ?", postID, CurrentUser.ID)
 			msg.Type = "pollUnvote"
 		}
 	}
 
 	for client := range clients {
-		if clients[client].UserID != currentUser.ID {
+		if clients[client].UserID != CurrentUser.ID {
 			err := writeWs(clients[client], client, msg)
 			if err != nil {
 				client.Close()
@@ -6483,42 +5966,38 @@ type auditLogEntry struct {
 }
 
 // audit log
-func showAdminAuditLog(w http.ResponseWriter, r *http.Request) {
-	currentUser, success := doSession(w, r)
-	if !success {
-		return
-	}
-	if len(currentUser.Username) == 0 {
-		http.Redirect(w, r, "/login", 302)
-		return
-	}
-	if currentUser.Level < admin.Manage.MinimumLevel {
+func showAdminAuditLog(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	if CurrentUser.Level < admin.Manage.MinimumLevel {
 		http.Redirect(w, r, "/", 302)
 		return
 	}
 
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
+	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
+	if err != nil {
+		offsetTime = time.Now().Unix()
+	}
 	typee := r.FormValue("type")
 	username := r.FormValue("username")
 
 	var rows *sql.Rows
-	var err error
+	//var err error
 
 	if typee != "" {
 		if username != "" {
 			var userIdThing int
 			db.QueryRow("SELECT id FROM users WHERE username = ? LIMIT 1", username).Scan(&userIdThing)
-			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE type = ? AND created_by = ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", typee, userIdThing, offset)
+			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE type = ? AND created_by = ? AND UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", typee, userIdThing, offsetTime, offset)
 		} else {
-			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE type = ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", typee, offset)
+			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE type = ? AND UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", typee, offsetTime, offset)
 		}
 	} else {
 		if username != "" {
 			var userIdThing int
 			db.QueryRow("SELECT id FROM users WHERE username = ? LIMIT 1", username).Scan(&userIdThing)
-			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE created_by = ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", userIdThing, offset)
+			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE created_by = ? AND UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", userIdThing, offsetTime, offset)
 		} else {
-			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries ORDER BY created_at DESC LIMIT 50 OFFSET ?", offset)
+			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", offsetTime, offset)
 		}
 	}
 	if err != nil {
@@ -6597,6 +6076,7 @@ func showAdminAuditLog(w http.ResponseWriter, r *http.Request) {
 	var data = map[string]interface{}{
 		"AuditLogEntries": auditLogEntries,
 		"Offset":          offset,
+		"OffsetTime":      offsetTime,
 		"Type":            typee,
 		"User":            username,
 	}

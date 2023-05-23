@@ -18,7 +18,7 @@
 	    <h2 class="label">{{.Title}}</h2>
             <div id="postsz">
                 <div class="body-content" id="community-post-list">
-                    <div class="list post-list js-post-list" data-next-page-url="{{if .Posts}}?{{if .Query}}q={{.Query}}{{end}}&offset={{.Offset}}{{end}}">
+                    <div class="list post-list js-post-list" data-next-page-url="{{if .Posts}}?{{if .Query}}q={{.Query}}{{end}}&offset={{.Offset}}&offset_time={{.OffsetTime}}{{end}}">
                         {{if .Posts}}
                             {{$user_id := .CurrentUser.ID}}
                             {{range $post := .Posts}}

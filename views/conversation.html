@@ -74,7 +74,7 @@
                         <input type="submit" class="black-button post-button disabled" value="Send" data-post-content-type="text" data-post-with-screenshot="nodata" disabled>
                     </div>
                 </form>
-			<div class="list messages"{{if .Messages}} data-next-page-url="/{{if .IsGroupChat}}conversations/{{.ConversationID}}{{else}}messages/{{.User.Username}}{{end}}?{{if .Query}}q={{.Query}}{{end}}&offset={{.Offset}}"{{end}}>
+			<div class="list messages"{{if .Messages}} data-next-page-url="/{{if .IsGroupChat}}conversations/{{.ConversationID}}{{else}}messages/{{.User.Username}}{{end}}?{{if .Query}}q={{.Query}}{{end}}&offset={{.Offset}}&offset_time={{.OffsetTime}}"{{end}}>
 				{{if .Messages}}
 					{{$username := .CurrentUser.Username}}
 					{{range $message := .Messages}}

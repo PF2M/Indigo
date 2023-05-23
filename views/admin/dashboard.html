@@ -21,7 +21,7 @@
                 <div id="postsz">
                     <div class="body-content" id="community-post-list">
 {{end}}
-                    <div class="list post-list js-post-list"{{if .Reports}} data-next-page-url="?offset={{.Offset}}"{{end}}>
+                    <div class="list post-list js-post-list"{{if .Reports}} data-next-page-url="?offset={{.Offset}}&offset_time={{.OffsetTime}}"{{end}}>
                         {{if .Reports}}
                             {{range $report := .Reports}}
                                 <div id="{{$report.ID}}" class="report post post-list-outline">

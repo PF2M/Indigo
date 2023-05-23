@@ -254,9 +254,9 @@ func createNotif(to int, notif_type int, post string, currentUser int) {
 	}
 
 	if notif_type == 0 || notif_type == 1 {
-		var nya bool
-		db.QueryRow("SELECT yeah_notifications FROM users WHERE id = ?", to).Scan(&nya)
-		if !nya {
+		var hasYeahNotificationsEnabled bool
+		db.QueryRow("SELECT yeah_notifications FROM users WHERE id = ?", to).Scan(&hasYeahNotificationsEnabled)
+		if !hasYeahNotificationsEnabled {
 			return
 		}
 	}

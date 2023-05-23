@@ -159,7 +159,7 @@
                     </div>
                 {{end}}
 {{end}}
-                    <div class="list post-list js-post-list" data-next-page-url="{{if .Posts}}?{{if .PopularPosts}}date={{.CurrentDate}}{{end}}{{if .Query}}&q={{.Query}}{{end}}&offset={{.Offset}}{{end}}">
+                    <div class="list post-list js-post-list" data-next-page-url="{{if .Posts}}?{{if .PopularPosts}}date={{.CurrentDate}}{{end}}{{if .Query}}&q={{.Query}}{{end}}&offset={{.Offset}}&offset_time={{.OffsetTime}}{{end}}">
                         {{if .Posts}}
                             {{$user_id := .CurrentUser.ID}}
                             {{range $post := .Posts}}

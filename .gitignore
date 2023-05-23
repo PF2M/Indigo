@@ -1,9 +1,15 @@
 /config.json
 /geoip.mmdb
+# "air" (basically gomon 2) outputs here
+tmp/
 *.swp
+# binaries. also main? but not realy
 handlers
 indigo
+# my personal configs
 config-my.json
 config-s.json
+# default images folder or symlink
+images
 images/
 images/*

@@ -168,142 +168,143 @@ func main() {
 	// Initialize routes.
 	r := mux.NewRouter()
 
+	// functions that don't useLogin or requireLogin,
+	// they don't necessarily not access the user
+	// but just do it independently, not utilizing the CurrentUser
+
 	// Index route.
-	r.HandleFunc("/", index).Methods("GET")
+	r.HandleFunc("/", useLogin(index)).Methods("GET")
 
 	// Auth routes.
 	r.HandleFunc("/signup", signup).Methods("GET", "POST")
 	r.HandleFunc("/login", login).Methods("GET", "POST")
 	r.HandleFunc("/logout", logout).Methods("POST")
-	r.HandleFunc("/reset", resetPassword).Methods("GET", "POST").Queries("token", "{token}")
-	r.HandleFunc("/reset", showResetPassword).Methods("GET", "POST")
+	r.HandleFunc("/reset", useLogin(resetPassword)).Methods("GET", "POST").Queries("token", "{token}")
+	r.HandleFunc("/reset", useLogin(showResetPassword)).Methods("GET", "POST")
 
 	// User routes.
-	r.HandleFunc("/users", showUserSearch).Methods("GET").Queries("query", "{username}")
-	r.HandleFunc("/users/{username}", showUser).Methods("GET")
-	r.HandleFunc("/users/{username}/posts", showUserPosts).Methods("GET")
-	r.HandleFunc("/users/{username}/comments", showUserComments).Methods("GET")
-	r.HandleFunc("/users/{username}/yeahs", showUserYeahs).Methods("GET")
-	r.HandleFunc("/users/{username}/friends", showFriends).Methods("GET")
-	r.HandleFunc("/users/{username}/following", showFollowing).Methods("GET")
-	r.HandleFunc("/users/{username}/followers", showFollowers).Methods("GET")
-	r.HandleFunc("/users/{username}/favorites", showFavorites).Methods("GET")
-	r.HandleFunc("/users/{username}/friend_new", newFriendRequest).Methods("POST")
-	r.HandleFunc("/users/{username}/friend_accept", acceptFriendRequest).Methods("POST")
-	r.HandleFunc("/users/{username}/friend_reject", rejectFriendRequest).Methods("POST")
-	r.HandleFunc("/users/{username}/friend_cancel", cancelFriendRequest).Methods("POST")
-	r.HandleFunc("/users/{username}/friend_delete", deleteFriend).Methods("POST")
-	r.HandleFunc("/users/{username}/follow", createFollow).Methods("POST")
-	r.HandleFunc("/users/{username}/unfollow", deleteFollow).Methods("POST")
-	r.HandleFunc("/users/{username}/violators", reportUser).Methods("POST")
-	r.HandleFunc("/users/{username}/block", blockUser).Methods("POST")
-	r.HandleFunc("/users/{username}/unblock", unblockUser).Methods("POST")
+	r.HandleFunc("/users", requireLogin(showUserSearch)).Methods("GET").Queries("query", "{username}")
+	r.HandleFunc("/users/{username}", useLogin(showUser)).Methods("GET")
+	r.HandleFunc("/users/{username}/posts", useLogin(showUserPosts)).Methods("GET")
+	r.HandleFunc("/users/{username}/comments", useLogin(showUserComments)).Methods("GET")
+	r.HandleFunc("/users/{username}/yeahs", useLogin(showUserYeahs)).Methods("GET")
+	r.HandleFunc("/users/{username}/friends", useLogin(showFriends)).Methods("GET")
+	r.HandleFunc("/users/{username}/following", useLogin(showFollowing)).Methods("GET")
+	r.HandleFunc("/users/{username}/followers", useLogin(showFollowers)).Methods("GET")
+	r.HandleFunc("/users/{username}/favorites", useLogin(showFavorites)).Methods("GET")
+	r.HandleFunc("/users/{username}/friend_new", requireLogin(newFriendRequest)).Methods("POST")
+	r.HandleFunc("/users/{username}/friend_accept", requireLogin(acceptFriendRequest)).Methods("POST")
+	r.HandleFunc("/users/{username}/friend_reject", requireLogin(rejectFriendRequest)).Methods("POST")
+	r.HandleFunc("/users/{username}/friend_cancel", requireLogin(cancelFriendRequest)).Methods("POST")
+	r.HandleFunc("/users/{username}/friend_delete", requireLogin(deleteFriend)).Methods("POST")
+	r.HandleFunc("/users/{username}/follow", requireLogin(createFollow)).Methods("POST")
+	r.HandleFunc("/users/{username}/unfollow", requireLogin(deleteFollow)).Methods("POST")
+	r.HandleFunc("/users/{username}/violators", requireLogin(reportUser)).Methods("POST")
+	r.HandleFunc("/users/{username}/block", requireLogin(blockUser)).Methods("POST")
+	r.HandleFunc("/users/{username}/unblock", requireLogin(unblockUser)).Methods("POST")
 
 	// Post routes.
-	r.HandleFunc("/posts/{id:[0-9]+}", showPost).Methods("GET")
-	r.HandleFunc("/posts/{id:[0-9]+}/yeah", createPostYeah).Methods("POST")
-	r.HandleFunc("/posts/{id:[0-9]+}/yeahu", deletePostYeah).Methods("POST")
-	r.HandleFunc("/posts/{id:[0-9]+}/comments", showAllComments).Methods("GET")
-	r.HandleFunc("/posts/{id:[0-9]+}/comments", createComment).Methods("POST")
-	r.HandleFunc("/posts/{id:[0-9]+}/favorite", favoritePost).Methods("POST")
-	r.HandleFunc("/posts/{id:[0-9]+}/unfavorite", unfavoritePost).Methods("POST")
-	r.HandleFunc("/posts/{id:[0-9]+}/violations", reportPost).Methods("POST")
-	r.HandleFunc("/posts/{id:[0-9]+}/vote", voteOnPoll).Methods("POST")
-	r.HandleFunc("/posts/{id:[0-9]+}/edit", editPost).Methods("POST")
-	r.HandleFunc("/posts/{id:[0-9]+}/delete", deletePost).Methods("POST")
+	r.HandleFunc("/posts/{id:[0-9]+}", useLogin(showPost)).Methods("GET")
+	r.HandleFunc("/posts/{id:[0-9]+}/yeah", requireLogin(createPostYeah)).Methods("POST")
+	r.HandleFunc("/posts/{id:[0-9]+}/yeahu", requireLogin(deletePostYeah)).Methods("POST")
+	r.HandleFunc("/posts/{id:[0-9]+}/comments", useLogin(showAllComments)).Methods("GET")
+	r.HandleFunc("/posts/{id:[0-9]+}/comments", requireLogin(createComment)).Methods("POST")
+	r.HandleFunc("/posts/{id:[0-9]+}/favorite", requireLogin(favoritePost)).Methods("POST")
+	r.HandleFunc("/posts/{id:[0-9]+}/unfavorite", requireLogin(unfavoritePost)).Methods("POST")
+	r.HandleFunc("/posts/{id:[0-9]+}/violations", requireLogin(reportPost)).Methods("POST")
+	r.HandleFunc("/posts/{id:[0-9]+}/vote", requireLogin(voteOnPoll)).Methods("POST")
+	r.HandleFunc("/posts/{id:[0-9]+}/edit", requireLogin(editPost)).Methods("POST")
+	r.HandleFunc("/posts/{id:[0-9]+}/delete", requireLogin(deletePost)).Methods("POST")
 
 	// Comment routes.
-	r.HandleFunc("/comments/{id:[0-9]+}", showComment).Methods("GET")
-	r.HandleFunc("/comments/{id:[0-9]+}/yeah", createCommentYeah).Methods("POST")
-	r.HandleFunc("/comments/{id:[0-9]+}/yeahu", deleteCommentYeah).Methods("POST")
-	r.HandleFunc("/comments/{id:[0-9]+}/violations", reportComment).Methods("POST")
-	r.HandleFunc("/comments/{id:[0-9]+}/edit", editComment).Methods("POST")
-	r.HandleFunc("/comments/{id:[0-9]+}/delete", deleteComment).Methods("POST")
+	r.HandleFunc("/comments/{id:[0-9]+}", useLogin(showComment)).Methods("GET")
+	r.HandleFunc("/comments/{id:[0-9]+}/yeah", requireLogin(createCommentYeah)).Methods("POST")
+	r.HandleFunc("/comments/{id:[0-9]+}/yeahu", requireLogin(deleteCommentYeah)).Methods("POST")
+	r.HandleFunc("/comments/{id:[0-9]+}/violations", requireLogin(reportComment)).Methods("POST")
+	r.HandleFunc("/comments/{id:[0-9]+}/edit", requireLogin(editComment)).Methods("POST")
+	r.HandleFunc("/comments/{id:[0-9]+}/delete", requireLogin(deleteComment)).Methods("POST")
 
 	// Community routes.
-	r.HandleFunc("/communities/all", showAllCommunities).Methods("GET")
-	r.HandleFunc("/communities/recent", showRecentCommunities).Methods("GET")
-	r.HandleFunc("/communities/search", showCommunitySearch).Methods("GET").Queries("query", "{search}")
-	r.HandleFunc("/communities/{id:[0-9]+}", showCommunity).Methods("GET")
-	r.HandleFunc("/communities/{id:[0-9]+}/hot", showPopularPosts).Methods("GET")
-	r.HandleFunc("/communities/{id:[0-9]+}/posts", createPost).Methods("POST")
-	r.HandleFunc("/communities/{id:[0-9]+}/favorite", addCommunityFavorite).Methods("POST")
-	r.HandleFunc("/communities/{id:[0-9]+}/unfavorite", deleteCommunityFavorite).Methods("POST")
+	r.HandleFunc("/communities/all", useLogin(showAllCommunities)).Methods("GET")
+	r.HandleFunc("/communities/recent", requireLogin(showRecentCommunities)).Methods("GET")
+	r.HandleFunc("/communities/search", useLogin(showCommunitySearch)).Methods("GET").Queries("query", "{search}")
+	r.HandleFunc("/communities/{id:[0-9]+}", useLogin(showCommunity)).Methods("GET")
+	r.HandleFunc("/communities/{id:[0-9]+}/hot", useLogin(showPopularPosts)).Methods("GET")
+	r.HandleFunc("/communities/{id:[0-9]+}/posts", requireLogin(createPost)).Methods("POST")
+	r.HandleFunc("/communities/{id:[0-9]+}/favorite", requireLogin(addCommunityFavorite)).Methods("POST")
+	r.HandleFunc("/communities/{id:[0-9]+}/unfavorite", requireLogin(deleteCommunityFavorite)).Methods("POST")
 
 	// Activiy Feed route.
-	r.HandleFunc("/activity", showActivityFeed).Methods("GET")
+	r.HandleFunc("/activity", requireLogin(showActivityFeed)).Methods("GET")
 
 	// Message routes.
-	r.HandleFunc("/messages", showMessages).Methods("GET")
-	r.HandleFunc("/messages", sendMessage).Methods("POST")
-	r.HandleFunc("/messages/{id:[0-9]+}/delete", deleteMessage).Methods("POST")
-	r.HandleFunc("/messages/{username}", showConversation).Methods("GET")
-	r.HandleFunc("/conversations/{id:[0-9]+}", showGroupChat).Methods("GET")
-	r.HandleFunc("/conversations/create", showCreateGroupChat).Methods("GET")
-	r.HandleFunc("/conversations/create", createGroupChat).Methods("POST")
-	r.HandleFunc("/conversations/{id:[0-9]+}/edit", showEditGroupChat).Methods("GET")
-	r.HandleFunc("/conversations/{id:[0-9]+}/edit", editGroupChat).Methods("POST")
-	r.HandleFunc("/conversations/{id:[0-9]+}/leave", leaveGroupChat).Methods("POST")
-	r.HandleFunc("/conversations/{id:[0-9]+}/delete", deleteGroupChat).Methods("POST")
+	r.HandleFunc("/messages", requireLogin(showMessages)).Methods("GET")
+	r.HandleFunc("/messages", requireLogin(sendMessage)).Methods("POST")
+	r.HandleFunc("/messages/{id:[0-9]+}/delete", requireLogin(deleteMessage)).Methods("POST")
+	r.HandleFunc("/messages/{username}", requireLogin(showConversation)).Methods("GET")
+	r.HandleFunc("/conversations/{id:[0-9]+}", requireLogin(showGroupChat)).Methods("GET")
+	r.HandleFunc("/conversations/create", requireLogin(showCreateGroupChat)).Methods("GET")
+	r.HandleFunc("/conversations/create", requireLogin(createGroupChat)).Methods("POST")
+	r.HandleFunc("/conversations/{id:[0-9]+}/edit", requireLogin(showEditGroupChat)).Methods("GET")
+	r.HandleFunc("/conversations/{id:[0-9]+}/edit", requireLogin(editGroupChat)).Methods("POST")
+	r.HandleFunc("/conversations/{id:[0-9]+}/leave", requireLogin(leaveGroupChat)).Methods("POST")
+	r.HandleFunc("/conversations/{id:[0-9]+}/delete", requireLogin(deleteGroupChat)).Methods("POST")
 
 	// Notification routes.
-	r.HandleFunc("/check_update.json", getNotificationCounts).Methods("GET")
-	r.HandleFunc("/notifications", showNotifications).Methods("GET")
-	r.HandleFunc("/notifications/friend_requests", showFriendRequests).Methods("GET")
+	r.HandleFunc("/check_update.json", requireLogin(getNotificationCounts)).Methods("GET")
+	r.HandleFunc("/notifications", requireLogin(showNotifications)).Methods("GET")
+	r.HandleFunc("/notifications/friend_requests", requireLogin(showFriendRequests)).Methods("GET")
 
 	// Settings routes.
-	r.HandleFunc("/settings/profile", showProfileSettings).Methods("GET")
-	r.HandleFunc("/settings/profile", editProfileSettings).Methods("POST")
-	r.HandleFunc("/region", getRegion).Methods("POST")
+	r.HandleFunc("/settings/profile", requireLogin(editProfileSettings)).Methods("POST")
+	r.HandleFunc("/region", requireLogin(getRegion)).Methods("POST")
 	r.HandleFunc("/miis", getMii).Methods("POST")
-	r.HandleFunc("/migrate/{id:[0-9]+}", migratePosts).Methods("POST")
-	r.HandleFunc("/rollback/{id:[0-9]+}", rollbackImport).Methods("POST")
-	r.HandleFunc("/settings/account", showAccountSettings).Methods("GET")
-	r.HandleFunc("/settings/account", editAccountSettings).Methods("POST")
-	r.HandleFunc("/blocked", showBlocked).Methods("GET")
+	r.HandleFunc("/migrate/{id:[0-9]+}", requireLogin(migratePosts)).Methods("POST")
+	r.HandleFunc("/rollback/{id:[0-9]+}", requireLogin(rollbackImport)).Methods("POST")
+	r.HandleFunc("/settings/account", requireLogin(showAccountSettings)).Methods("GET")
+	r.HandleFunc("/settings/account", requireLogin(editAccountSettings)).Methods("POST")
+	r.HandleFunc("/blocked", requireLogin(showBlocked)).Methods("GET")
 
 	// Help page routes.
-	r.HandleFunc("/help/rules", showRulesPage).Methods("GET")
-	r.HandleFunc("/help/faq", showFAQPage).Methods("GET")
-	r.HandleFunc("/help/legal", showLegalPage).Methods("GET")
-	r.HandleFunc("/help/contact", showContactPage).Methods("GET")
+	r.HandleFunc("/help/rules", useLogin(showRulesPage)).Methods("GET")
+	r.HandleFunc("/help/faq", useLogin(showFAQPage)).Methods("GET")
+	r.HandleFunc("/help/legal", useLogin(showLegalPage)).Methods("GET")
+	r.HandleFunc("/help/contact", useLogin(showContactPage)).Methods("GET")
 
 	// Image upload route.
 	r.HandleFunc("/upload", uploadImage).Methods("POST")
 
 	// Admin routes.
-	r.HandleFunc("/admin", showAdminDashboard).Methods("GET")
-	r.HandleFunc("/reports/{id:[0-9]+}/ignore", reportIgnore).Methods("POST")
-	r.HandleFunc("/admin/manage", showAdminManagerList).Methods("GET")
-	r.HandleFunc("/admin/manage/bantemp", adminBanUser).Methods("POST")
-	r.HandleFunc("/admin/manage/unbantemp", adminUnbanUser).Methods("POST")
-	//r.HandleFunc("/admin/manage/{table}", showAdminManager).Methods("GET")
-	//r.HandleFunc("/admin/manage/{table}/{id:[0-9]+}", showAdminEditor).Methods("GET", "POST")
-	r.HandleFunc("/admin/settings", showAdminSettings).Methods("GET", "POST")
-	r.HandleFunc("/admin/audit_log", showAdminAuditLog).Methods("GET")
+	r.HandleFunc("/admin", requireLogin(showAdminDashboard)).Methods("GET")
+	r.HandleFunc("/reports/{id:[0-9]+}/ignore", requireLogin(reportIgnore)).Methods("POST")
+	r.HandleFunc("/admin/manage", requireLogin(showAdminManagerList)).Methods("GET")
+	r.HandleFunc("/admin/manage/bantemp", requireLogin(adminBanUser)).Methods("POST")
+	r.HandleFunc("/admin/manage/unbantemp", requireLogin(adminUnbanUser)).Methods("POST")
+	//r.HandleFunc("/admin/manage/{table}", requireLogin(showAdminManager)).Methods("GET")
+	//r.HandleFunc("/admin/manage/{table}/{id:[0-9]+}", requireLogin(showAdminEditor)).Methods("GET", "POST")
+	r.HandleFunc("/admin/settings", requireLogin(showAdminSettings)).Methods("GET", "POST")
+	r.HandleFunc("/admin/audit_log", requireLogin(showAdminAuditLog)).Methods("GET")
 
 	// Websocket route.
-	r.HandleFunc("/ws", handleConnections).Methods("GET")
+	r.HandleFunc("/ws", requireLogin(handleConnections)).Methods("GET")
 
 	// Add a 404 page.
-	r.NotFoundHandler = http.HandlerFunc(handle404)
+	r.NotFoundHandler = http.HandlerFunc(useLogin(handle404))
 
 	// Serve static assets.
 	r.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
 	// serve images as /images even though this can be changed
 	r.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("images"))))
 
-	var handler http.Handler = r
-
 	if !settings.CSRFProtectDisable {
-		handler = CSRF(r)
+		r.Use(CSRF)
 	}
 	if settings.GzipEnabled {
-		handler = gziphandler.GzipHandler(handler)
+		r.Use(gziphandler.GzipHandler)
 	}
 
 	// Tell the http server to handle routing with the router we just made.
-	http.Handle("/", handler)
+	http.Handle("/", r)
 	// Tell the person who started this that we are starting the server.
 	log.Printf("listening on " + settings.Port)
 
