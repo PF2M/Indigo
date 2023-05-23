@@ -81,7 +81,7 @@ type config struct {
 	GzipEnabled bool
 	// will disable csrf protection which you probably want to do because it's annoying
 	CSRFProtectDisable bool
-	SSL struct {
+	SSL                struct {
 		Enabled     bool
 		Certificate string
 		Key         string
@@ -120,15 +120,15 @@ type config struct {
 		Email    string
 		Password string
 	}
-	CSRFSecret      string
-	IPHubKey        string
+	CSRFSecret        string
+	IPHubKey          string
 	MiiEndpointPrefix string
-	Proxy           bool
-	ForceLogins     bool
-	AllowSignups    bool
-	DefaultTimezone string
-	ReportReasons   []reportReason
-	TextToReplace   []struct {
+	Proxy             bool
+	ForceLogins       bool
+	AllowSignups      bool
+	DefaultTimezone   string
+	ReportReasons     []reportReason
+	TextToReplace     []struct {
 		Original string
 		Replaced string
 	}
@@ -469,12 +469,12 @@ type wsMessage struct {
 
 // Variable declarations for websocket sessions.
 type wsSession struct {
-	Mutex 		*sync.Mutex
-	Connected	bool
-	UserID		int
-	Level		int
-	OnPage		string
-	Send		chan wsMessage
+	Mutex     *sync.Mutex
+	Connected bool
+	UserID    int
+	Level     int
+	OnPage    string
+	Send      chan wsMessage
 }
 
 // Variable declarations for Yeahs.
@@ -487,6 +487,6 @@ type yeah struct {
 }
 
 type iphubBlockResponse struct {
-        Block    int8   `json:"block"`
-        ASN      uint16 `json:"asn""`
+	Block int8   `json:"block"`
+	ASN   uint16 `json:"asn""`
 }

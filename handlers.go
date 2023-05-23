@@ -14,13 +14,13 @@ import (
 	"html"
 	"io"
 	"io/ioutil"
-	"path/filepath"
 	"mime"
 	"mime/multipart"
 	"net"
 	"net/http"
 	"net/smtp"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -484,7 +484,7 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 		comments.Body = parseBody(comments.BodyText, false, true)
 
 		comments.ByMii = true
-		var data = map[string]interface{} {
+		var data = map[string]interface{}{
 			"CanYeah": false,
 			"Comment": comments,
 		}
@@ -516,7 +516,7 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 		templates.ExecuteTemplate(&commentTpl, "create_comment.html", data)
 		var commentCount int
 		db.QueryRow("SELECT COUNT(*) FROM comments WHERE post = ?", post_id).Scan(&commentCount)
-		data = map[string]interface{} {
+		data = map[string]interface{}{
 			"CommentPreview": comments,
 			"CommentCount":   commentCount,
 		}
@@ -746,7 +746,7 @@ func createGroupChat(w http.ResponseWriter, r *http.Request) {
 		stmt.Close()
 	}
 
-	http.Redirect(w, r, "/conversations/" + strconv.Itoa(conversationID), 302)
+	http.Redirect(w, r, "/conversations/"+strconv.Itoa(conversationID), 302)
 }
 
 // Create a post.
@@ -974,11 +974,11 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 
 		for client := range clients {
 			if clients[client].OnPage == "/communities/"+community_id &&
-			clients[client].UserID != posts.CreatedBy &&
+				clients[client].UserID != posts.CreatedBy &&
 				(!checkIfEitherBlocked(clients[client].UserID, posts.CreatedBy) ||
 					clients[client].Level > 0) &&
-			!inForbiddenKeywords(body, clients[client].UserID) &&
-			(posts.Privacy == 0) {
+				!inForbiddenKeywords(body, clients[client].UserID) &&
+				(posts.Privacy == 0) {
 				msg.Content = CommunityPostTpl.String()
 				err := writeWs(clients[client], client, msg)
 				if err != nil {
@@ -2050,7 +2050,7 @@ func getNotificationCounts(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	checkUpdate, err := json.Marshal(map[string]interface{} {
+	checkUpdate, err := json.Marshal(map[string]interface{}{
 		"success": true,
 		"n":       currentUser.Notifications.Notifications,
 		"msg":     currentUser.Notifications.Messages,
@@ -2114,7 +2114,7 @@ func handle404(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNotFound)
 	pjax := r.Header.Get("X-PJAX") == ""
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       "Error",
 		"Pjax":        pjax,
 		"CurrentUser": currentUser,
@@ -2299,7 +2299,7 @@ func index(w http.ResponseWriter, r *http.Request) {
 	}
 	community_rows.Close()
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       "Communities",
 		"Pjax":        pjax,
 		"CurrentUser": currentUser,
@@ -2364,7 +2364,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		formError := r.FormValue("error")
 		pjax := r.Header.Get("X-PJAX") == ""
-		var data = map[string]interface{} {
+		var data = map[string]interface{}{
 			"Title":        "Log In",
 			"CurrentUser":  currentUser,
 			"ForceLogins":  settings.ForceLogins,
@@ -2445,7 +2445,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 			}
 			ip, _, err := net.SplitHostPort(getIP(r))
 			acceptLanguage := r.Header.Get("Accept-Language")
-			data := map[string]interface{} {
+			data := map[string]interface{}{
 				"content": fmt.Sprintf("`%s` (`%s`) logged in\nUser agent: %s\nIP: `%s`\nAccept-Language: %s\nProfile: %s", users.Nickname, users.Username, escapeMarkdown(r.UserAgent()), ip, escapeMarkdown(acceptLanguage), getHostname(r.Host)+"/users/"+url.PathEscape(users.Username)),
 			}
 			jsonBytes, err := json.Marshal(data)
@@ -2795,7 +2795,7 @@ func reportComment(w http.ResponseWriter, r *http.Request) {
 			content += "Message: " + escapeMarkdown(message) + "\n"
 		}
 		content += "Comment link: " + getHostname(r.Host) + "/comments/" + comment_id
-		data := map[string]interface{} {
+		data := map[string]interface{}{
 			"content": content,
 		}
 		jsonBytes, err := json.Marshal(data)
@@ -2893,7 +2893,7 @@ func reportPost(w http.ResponseWriter, r *http.Request) {
 			content += "Message: " + escapeMarkdown(message) + "\n"
 		}
 		content += "Post link: " + getHostname(r.Host) + "/posts/" + post_id
-		data := map[string]interface{} {
+		data := map[string]interface{}{
 			"content": content,
 		}
 		jsonBytes, err := json.Marshal(data)
@@ -2955,7 +2955,7 @@ func reportUser(w http.ResponseWriter, r *http.Request) {
 	if settings.Webhooks.Enabled && len(settings.Webhooks.Reports) > 0 {
 		reasonInt, _ := strconv.Atoi(reason)
 		content := fmt.Sprintf("New report from **%s**.\nReason: %s\nMessage: %s\nUser link: %s/users/%s", escapeMarkdown(currentUser.Nickname), settings.ReportReasons[reasonInt].Name, escapeMarkdown(message), getHostname(r.Host), url.PathEscape(username))
-		data := map[string]interface{} {
+		data := map[string]interface{}{
 			"content": content,
 		}
 		jsonBytes, err := json.Marshal(data)
@@ -2987,7 +2987,7 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(username) == 0 {
-		data = map[string]interface{} {
+		data = map[string]interface{}{
 			"Title":       "Reset Password",
 			"CurrentUser": currentUser,
 			"Action":      "error",
@@ -2998,7 +2998,7 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 		confirm := r.FormValue("confirm")
 		if password != confirm {
 			w.WriteHeader(http.StatusBadRequest)
-			data = map[string]interface{} {
+			data = map[string]interface{}{
 				"Title":       "Reset Password",
 				"CurrentUser": currentUser,
 				"Action":      "reset",
@@ -3007,7 +3007,7 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 			}
 		} else if len(password) == 0 {
 			w.WriteHeader(http.StatusBadRequest)
-			data = map[string]interface{} {
+			data = map[string]interface{}{
 				"Title":       "Reset Password",
 				"CurrentUser": currentUser,
 				"Action":      "reset",
@@ -3055,7 +3055,7 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 			if !success {
 				return
 			}
-			data = map[string]interface{} {
+			data = map[string]interface{}{
 				"Title":       "Reset Password",
 				"CurrentUser": currentUser,
 				"Action":      "success",
@@ -3063,7 +3063,7 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		data = map[string]interface{} {
+		data = map[string]interface{}{
 			"Title":       "Reset Password",
 			"CurrentUser": currentUser,
 			"Action":      "reset",
@@ -3443,7 +3443,7 @@ func showActivityFeed(w http.ResponseWriter, r *http.Request) {
 		}
 		post_rows.Close()
 		offset += 20
-		var data = map[string]interface{} {
+		var data = map[string]interface{}{
 			"Offset": offset,
 			"Posts":  posts,
 		}
@@ -3453,7 +3453,7 @@ func showActivityFeed(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		var data = map[string]interface{} {
+		var data = map[string]interface{}{
 			"Title":          "Activity Feed",
 			"Pjax":           pjax,
 			"CurrentUser":    currentUser,
@@ -3525,7 +3525,7 @@ func showAdminDashboard(w http.ResponseWriter, r *http.Request) {
 
 	offset += 25
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       "Admin Dashboard",
 		"Pjax":        pjax,
 		"Offset":      offset,
@@ -3556,7 +3556,7 @@ func showAdminManagerList(w http.ResponseWriter, r *http.Request) {
 
 	pjax := r.Header.Get("X-PJAX") == ""
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       "Manage",
 		"Pjax":        pjax,
 		"CurrentUser": currentUser,
@@ -3655,7 +3655,7 @@ func showAdminSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pjax := r.Header.Get("X-PJAX") == ""
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       "Admin Settings",
 		"Pjax":        pjax,
 		"CurrentUser": currentUser,
@@ -3733,7 +3733,7 @@ func showAllComments(w http.ResponseWriter, r *http.Request) {
 	}
 	comment_rows.Close()
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"CurrentUser":    currentUser,
 		"PinnedComments": pinnedComments,
 		"Comments":       comments,
@@ -3776,7 +3776,7 @@ func showAllCommunities(w http.ResponseWriter, r *http.Request) {
 
 	offset += 25
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "All Communities",
 		"Pjax":           pjax,
 		"Offset":         offset,
@@ -3837,7 +3837,7 @@ func showBlocked(w http.ResponseWriter, r *http.Request) {
 
 	offset += 25
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Blocked Users",
 		"Pjax":           pjax,
 		"Offset":         offset,
@@ -3931,7 +3931,7 @@ func showComment(w http.ResponseWriter, r *http.Request) {
 	}
 	yeah_rows.Close()
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       comments.CommenterNickname + "'s Comment on " + posts.PosterNickname + "'s Post",
 		"Pjax":        pjax,
 		"CurrentUser": currentUser,
@@ -4017,7 +4017,7 @@ func showCommunity(w http.ResponseWriter, r *http.Request) {
 
 	offset += 25
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":         communities.Title,
 		"Pjax":          pjax,
 		"Offset":        offset,
@@ -4075,7 +4075,7 @@ func showCommunitySearch(w http.ResponseWriter, r *http.Request) {
 
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Search Communities",
 		"Pjax":           pjax,
 		"Offset":         offset,
@@ -4103,7 +4103,7 @@ func showContactPage(w http.ResponseWriter, r *http.Request) {
 	pjax := r.Header.Get("X-PJAX") == ""
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Contact the Team",
 		"Pjax":           pjax,
 		"CurrentUser":    currentUser,
@@ -4196,7 +4196,7 @@ func showConversation(w http.ResponseWriter, r *http.Request) {
 	offset += 20
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Conversation with " + user.Nickname + " (" + user.Username + ")",
 		"Offset":         offset,
 		"Pjax":           pjax,
@@ -4271,7 +4271,7 @@ func showCreateGroupChat(w http.ResponseWriter, r *http.Request) {
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 	offset += 20
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Create Group Chat",
 		"Pjax":           pjax,
 		"Offset":         offset,
@@ -4352,7 +4352,7 @@ func showEditGroupChat(w http.ResponseWriter, r *http.Request) {
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 	offset += 20
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Edit Group Chat",
 		"Pjax":           pjax,
 		"Offset":         offset,
@@ -4382,7 +4382,7 @@ func showFAQPage(w http.ResponseWriter, r *http.Request) {
 	pjax := r.Header.Get("X-PJAX") == ""
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Frequently Asked Questions (FAQ)",
 		"Pjax":           pjax,
 		"CurrentUser":    currentUser,
@@ -4439,7 +4439,7 @@ func showFavorites(w http.ResponseWriter, r *http.Request) {
 
 	offset += 20
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       users.Nickname + "'s Favorite Communities",
 		"Pjax":        pjax,
 		"Offset":      offset,
@@ -4497,7 +4497,7 @@ func showFollowers(w http.ResponseWriter, r *http.Request) {
 
 	offset += 20
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       users.Nickname + "'s Followers",
 		"Pjax":        pjax,
 		"Offset":      offset,
@@ -4556,7 +4556,7 @@ func showFollowing(w http.ResponseWriter, r *http.Request) {
 
 	offset += 20
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       "Users " + users.Nickname + " is Following",
 		"Pjax":        pjax,
 		"Offset":      offset,
@@ -4635,7 +4635,7 @@ func showFriendRequests(w http.ResponseWriter, r *http.Request) {
 
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Friend Requests",
 		"Pjax":           pjax,
 		"CurrentUser":    currentUser,
@@ -4695,7 +4695,7 @@ func showFriends(w http.ResponseWriter, r *http.Request) {
 
 	offset += 20
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       users.Nickname + "'s Friends",
 		"Pjax":        pjax,
 		"Offset":      offset,
@@ -4801,7 +4801,7 @@ func showGroupChat(w http.ResponseWriter, r *http.Request) {
 	offset += 20
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          title,
 		"Offset":         offset,
 		"Pjax":           pjax,
@@ -4847,7 +4847,7 @@ func showLegalPage(w http.ResponseWriter, r *http.Request) {
 
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Legal Information",
 		"Pjax":           pjax,
 		"CurrentUser":    currentUser,
@@ -4934,7 +4934,7 @@ func showMessages(w http.ResponseWriter, r *http.Request) {
 	offset += 20
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Messages",
 		"Pjax":           pjax,
 		"Offset":         offset,
@@ -5020,7 +5020,7 @@ func showNotifications(w http.ResponseWriter, r *http.Request) {
 	stmt.Exec(currentUser.ID)
 	stmt.Close()
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Notifications",
 		"Pjax":           pjax,
 		"CurrentUser":    currentUser,
@@ -5117,7 +5117,7 @@ func showPopularPosts(w http.ResponseWriter, r *http.Request) {
 
 	offset += 25
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":         communities.Title,
 		"Pjax":          pjax,
 		"Offset":        offset,
@@ -5280,7 +5280,7 @@ func showPost(w http.ResponseWriter, r *http.Request) {
 		isBlocked = true
 	}
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          posts.PosterNickname + "'s Post",
 		"Pjax":           pjax,
 		"CurrentUser":    currentUser,
@@ -5339,7 +5339,7 @@ func showProfileSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	import_rows.Close()
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       "Profile Settings",
 		"Pjax":        pjax,
 		"User":        currentUser,
@@ -5373,7 +5373,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 		var currentUser user
 		currentUser.CSRFToken = csrf.Token(r)
 		pjax := r.Header.Get("X-PJAX") == ""
-		var data = map[string]interface{} {
+		var data = map[string]interface{}{
 			"Title":       "Sign Up",
 			"CurrentUser": currentUser,
 			"Pjax":        pjax,
@@ -5501,7 +5501,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(settings.IPHubKey) > 0 {
 			client := &http.Client{}
-			req, _ := http.NewRequest("GET", "https://v2.api.iphub.info/ip/" + ipHost, nil)
+			req, _ := http.NewRequest("GET", "https://v2.api.iphub.info/ip/"+ipHost, nil)
 			req.Header.Set("X-Key", settings.IPHubKey)
 			res, _ := client.Do(req)
 			defer res.Body.Close()
@@ -5511,7 +5511,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			var jsonBody iphubBlockResponse
-                	json.Unmarshal(body, &jsonBody)
+			json.Unmarshal(body, &jsonBody)
 
 			var bannedASN int
 			db.QueryRow("SELECT asn FROM ip_bans WHERE asn = ?", jsonBody.ASN).Scan(&bannedASN)
@@ -5569,7 +5569,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 						email = "`" + escapeMarkdown(email) + "`"
 					}
 					acceptLanguage := r.Header.Get("Accept-Language")
-					data := map[string]interface{} {
+					data := map[string]interface{}{
 						"content": fmt.Sprintf("`%s` (`%s`) signed up\nEmail: %s\nUser agent: %s\nIP: `%s`\nAccept-Language: %s\nProfile: %s", nickname, username, email, escapeMarkdown(r.UserAgent()), ipHost, escapeMarkdown(acceptLanguage), getHostname(r.Host)+"/users/"+url.PathEscape(username)),
 					}
 					jsonBytes, err := json.Marshal(data)
@@ -5624,7 +5624,7 @@ func showRecentCommunities(w http.ResponseWriter, r *http.Request) {
 
 	offset += 20
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Offset":      offset,
 		"Communities": communities,
 	}
@@ -5648,7 +5648,7 @@ func showResetPassword(w http.ResponseWriter, r *http.Request) {
 		var username string
 		db.QueryRow("SELECT id, username FROM users WHERE email = ? ORDER BY id DESC LIMIT 1", email).Scan(&userID, &username)
 		if len(username) == 0 {
-			data = map[string]interface{} {
+			data = map[string]interface{}{
 				"Title":       "Reset Password",
 				"CurrentUser": currentUser,
 				"Action":      "error",
@@ -5664,61 +5664,62 @@ func showResetPassword(w http.ResponseWriter, r *http.Request) {
 
 			hostname := getHostname(r.Host)
 			message := fmt.Sprintf("Subject: Password reset for %s\nFrom: psy gangnam style hd download shit ass little fucking penis <%s>\nContent-Type: text/html\n\n<!DOCTYPE html><html><body><img src=\"%s/assets/img/menu-logo.png\"><br>A password reset request has been made for your account.<br>If you initiated this request, go here: <a href=\"%s/reset?token=%s\">%s/reset?token=%s</a><br>Otherwise, you can probably ignore this email, as these kinds of requests can be sent by anyone.</body></html>", username, settings.SMTP.Email, hostname, hostname, token, hostname)
-    c, err := smtp.Dial(settings.SMTP.Hostname+settings.SMTP.Port)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-    // TLS config
-    tlsconfig := &tls.Config {
-        InsecureSkipVerify: true,
-        ServerName: r.Host,
-    }
+			c, err := smtp.Dial(settings.SMTP.Hostname + settings.SMTP.Port)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			// TLS config
+			tlsconfig := &tls.Config{
+				InsecureSkipVerify: true,
+				ServerName:         r.Host,
+			}
 
-    if err = c.StartTLS(tlsconfig); err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+			if err = c.StartTLS(tlsconfig); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 
-    // Auth
-    /*if err = c.Auth(auth); err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }*/
+			// Auth
+			/*if err = c.Auth(auth); err != nil {
+			    http.Error(w, err.Error(), http.StatusInternalServerError)
+			    return
+			}*/
 
-    // To && From
-    if err = c.Mail(settings.SMTP.Email); err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+			// To && From
+			if err = c.Mail(settings.SMTP.Email); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 
-    c.Rcpt(email)
+			c.Rcpt(email)
 
-    // Data
-    wr, err := c.Data()
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+			// Data
+			wr, err := c.Data()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 
-    wr.Write([]byte(message))
+			wr.Write([]byte(message))
 
-    /*err = */wr.Close()
-    /*if err != nil {
-        log.Panic(err)
-    }*/
+			/*err = */
+			wr.Close()
+			/*if err != nil {
+			    log.Panic(err)
+			}*/
 
-    c.Quit()
+			c.Quit()
 			//err = smtp.SendMail(settings.SMTP.Hostname+settings.SMTP.Port, auth, settings.SMTP.Email, []string{email}, []byte(message))
 			if err != nil {
-				data = map[string]interface{} {
+				data = map[string]interface{}{
 					"Title":       "Reset Password",
 					"CurrentUser": currentUser,
 					"Action":      "error",
 					"Error":       err.Error(),
 				}
 			} else {
-				data = map[string]interface{} {
+				data = map[string]interface{}{
 					"Title":       "Reset Password",
 					"CurrentUser": currentUser,
 					"Action":      "sent",
@@ -5728,7 +5729,7 @@ func showResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if settings.SMTP.Enabled {
 		pjax := r.Header.Get("X-PJAX") == ""
-		data = map[string]interface{} {
+		data = map[string]interface{}{
 			"Title":       "Reset Password",
 			"CurrentUser": currentUser,
 			"Action":      "request",
@@ -5737,7 +5738,7 @@ func showResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		pjax := r.Header.Get("X-PJAX") == ""
-		data = map[string]interface{} {
+		data = map[string]interface{}{
 			"Title":       "Reset Password",
 			"CurrentUser": currentUser,
 			"Pjax":        pjax,
@@ -5767,7 +5768,7 @@ func showRulesPage(w http.ResponseWriter, r *http.Request) {
 	db.QueryRow("SELECT COUNT(*) FROM follows WHERE follow_by = ?", currentUser.ID).Scan(&followingCount)
 	db.QueryRow("SELECT COUNT(*) FROM follows WHERE follow_to = ?", currentUser.ID).Scan(&followerCount)
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Indigo Rules",
 		"Pjax":           pjax,
 		"CurrentUser":    currentUser,
@@ -5842,7 +5843,7 @@ func showUser(w http.ResponseWriter, r *http.Request) {
 	}
 	yeah_rows.Close()
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       user.Nickname + "'s Profile",
 		"Pjax":        pjax,
 		"CurrentUser": currentUser,
@@ -5911,7 +5912,7 @@ func showUserComments(w http.ResponseWriter, r *http.Request) {
 
 	offset += 25
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       user.Nickname + "'s Comments",
 		"Pjax":        pjax,
 		"Offset":      offset,
@@ -5978,7 +5979,7 @@ func showUserPosts(w http.ResponseWriter, r *http.Request) {
 	post_rows.Close()
 	offset += 25
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       user.Nickname + "'s Posts",
 		"Pjax":        pjax,
 		"Offset":      offset,
@@ -6042,7 +6043,7 @@ func showUserSearch(w http.ResponseWriter, r *http.Request) {
 
 	friendCount, followingCount, followerCount := setupSidebarStatus(currentUser.ID)
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":          "Search Users",
 		"Pjax":           pjax,
 		"CurrentUser":    currentUser,
@@ -6112,7 +6113,7 @@ func showUserYeahs(w http.ResponseWriter, r *http.Request) {
 
 	offset += 25
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"Title":       user.Nickname + "'s Yeahs",
 		"Pjax":        pjax,
 		"Offset":      offset,
@@ -6220,7 +6221,7 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 	// parse multipart form with 32 mb as max memory
 	err := r.ParseMultipartForm(20 << 20)
 	if err != nil {
-		http.Error(w, "Error parsing upload form: " + err.Error(), http.StatusBadRequest)
+		http.Error(w, "Error parsing upload form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	// clean up files that parsemultipartform leaves at the end
@@ -6295,7 +6296,7 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 			}
 			w.Write([]byte(image_id))
 		} else {
-			http.Error(w, "cloudinary sent an unexpected response: \n" + string(body), http.StatusInternalServerError)
+			http.Error(w, "cloudinary sent an unexpected response: \n"+string(body), http.StatusInternalServerError)
 			return
 		}
 	case "local":
@@ -6310,7 +6311,7 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 		imageFilePath := settings.ImageHost.ImageEndpoint + "/" + hash + fileExtension
 		outputFile, err := os.Create(imageFilePath)
 		if err != nil {
-			http.Error(w, "Could not create output file: " + err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Could not create output file: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer outputFile.Close()
@@ -6405,8 +6406,6 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 				//w.Write(body.Bytes())*/
 	}
 }
-
-
 
 // Vote on a poll.
 func voteOnPoll(w http.ResponseWriter, r *http.Request) {
@@ -6556,7 +6555,7 @@ func showAdminAuditLog(w http.ResponseWriter, r *http.Request) {
 				db.QueryRow("SELECT body, created_by FROM comments WHERE id = ? LIMIT 1", row.Context).Scan(&postBody, &targetUserId)
 			} else if row.Type == 4 {
 				db.QueryRow("SELECT token, user FROM password_resets WHERE id = ? LIMIT 1", row.Context).Scan(&postBody, &targetUserId)
-				if(targetUserId == 1) {
+				if targetUserId == 1 {
 					targetUserId = row.CreatedBy
 					targetUser.ID = row.CreatedBy
 					targetUser.Username = postBody
@@ -6574,26 +6573,26 @@ func showAdminAuditLog(w http.ResponseWriter, r *http.Request) {
 			db.QueryRow("SELECT avatar, has_mh FROM users WHERE id = ? LIMIT 1", targetUserId).Scan(&targetUser.Avatar, &targetUser.HasMii)
 		}
 		row.TargetUserAvatar = getAvatar(targetUser.Avatar, targetUser.HasMii, 0)
-		switch(row.Type) {
-			case 0:
-				row.TypeText = "post delete"
-				row.TypeURI = "/posts/" + strconv.Itoa(row.Context)
-			case 1:
-				row.TypeText = "comment delete"
-				row.TypeURI = "/comments/" + strconv.Itoa(row.Context)
-			case 2:
-				row.TypeText = "ban"
+		switch row.Type {
+		case 0:
+			row.TypeText = "post delete"
+			row.TypeURI = "/posts/" + strconv.Itoa(row.Context)
+		case 1:
+			row.TypeText = "comment delete"
+			row.TypeURI = "/comments/" + strconv.Itoa(row.Context)
+		case 2:
+			row.TypeText = "ban"
+			row.TypeURI = "/users/" + targetUser.Username
+		case 3:
+			row.TypeText = "unban"
+			row.TypeURI = "/users/" + targetUser.Username
+		case 4:
+			row.TypeText = "invite"
+			if targetUser.ID == row.CreatedBy {
+				row.TypeURI = "/invite/" + targetUser.Username
+			} else {
 				row.TypeURI = "/users/" + targetUser.Username
-			case 3:
-				row.TypeText = "unban"
-				row.TypeURI = "/users/" + targetUser.Username
-			case 4:
-				row.TypeText = "invite"
-				if targetUser.ID == row.CreatedBy {
-					row.TypeURI = "/invite/" + targetUser.Username
-				} else {
-					row.TypeURI = "/users/" + targetUser.Username
-				}
+			}
 		}
 		db.QueryRow("SELECT username, nickname, avatar, has_mh FROM users WHERE id = ? LIMIT 1", row.CreatedBy).Scan(&row.CreatorUsername, &row.CreatorNickname, &row.CreatorAvatar, &row.CreatorHasMii)
 		row.CreatorFinalAva = getAvatar(row.CreatorAvatar, row.CreatorHasMii, 3)
@@ -6601,11 +6600,11 @@ func showAdminAuditLog(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
-	var data = map[string]interface{} {
+	var data = map[string]interface{}{
 		"AuditLogEntries": auditLogEntries,
-		"Offset": offset,
-		"Type": typee,
-		"User": username,
+		"Offset":          offset,
+		"Type":            typee,
+		"User":            username,
 	}
 	err = templates.ExecuteTemplate(w, "audit_logs.html", data)
 	if err != nil {

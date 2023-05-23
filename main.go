@@ -47,13 +47,13 @@ import (
 	"regexp"
 
 	// Externals
+	"github.com/NYTimes/gziphandler"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/oschwald/geoip2-golang"
 	"github.com/russross/blackfriday/v2"
-	"github.com/NYTimes/gziphandler"
 )
 
 // Initialize some variables.
@@ -102,7 +102,7 @@ func main() {
 	}
 
 	// Connect to the database.
-	db, err = sql.Open("mysql", settings.DB.Username + ":" + settings.DB.Password + "@tcp(" + settings.DB.Host + ")/" + settings.DB.Name + "?parseTime=true&loc=US%2FEastern&charset=utf8mb4,utf8")
+	db, err = sql.Open("mysql", settings.DB.Username+":"+settings.DB.Password+"@tcp("+settings.DB.Host+")/"+settings.DB.Name+"?parseTime=true&loc=US%2FEastern&charset=utf8mb4,utf8")
 	if err != nil {
 		log.Printf("[err]: unable to connect to the database...\n")
 		log.Printf("       %v\n", err)
@@ -291,7 +291,7 @@ func main() {
 	// Serve static assets.
 	r.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
 	// serve images as /images even though this can be changed
-        r.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("images"))))
+	r.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("images"))))
 
 	var handler http.Handler = r
 

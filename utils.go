@@ -155,7 +155,7 @@ func escapeMarkdown(text string) string {
 func getCIDR(ip string, cidr string) string {
 	netmasks := strings.Split(ip, ".")
 	netmasks[3] = "0"
-	if(cidr == "2") {
+	if cidr == "2" {
 		netmasks[2] = "0"
 	}
 	return strings.Join(netmasks, ".")
@@ -416,8 +416,8 @@ func showBan(w http.ResponseWriter, currentUser user, banLength time.Time) bool 
 		return false
 	} else {
 		var data = map[string]interface{}{
-			"CurrentUser": currentUser,
-			"Length":      banLength.Format("01/02/2006 3:04 PM"),
+			"CurrentUser":   currentUser,
+			"Length":        banLength.Format("01/02/2006 3:04 PM"),
 			"LengthForever": banLength.Year() > 2100,
 		}
 		err := templates.ExecuteTemplate(w, "ban.html", data)
@@ -766,7 +766,7 @@ func inForbiddenKeywords(text string, userID int) bool {
 	var forbiddenKeywords string
 	err := db.QueryRow("SELECT forbidden_keywords FROM users WHERE id = ?", userID).Scan(&forbiddenKeywords)
 	if err != nil {
-		fmt.Println("error while getting forbiden keywrod")
+		fmt.Println("error while getting forbidden keyword")
 		fmt.Println(err)
 	}
 	isMatch, err := regexp.MatchString(escapeForbiddenKeywords(forbiddenKeywords), text)
