@@ -12,12 +12,12 @@ See [the FAQ](https://indigo.cafe/help/faq) if you have any questions about this
 7. Build the server with `go build` and then run the new program that is created, or use `go run *.go` (Linux/MacOS only).
 8. Make an account, give yourself admin through the MySQL CLI (`UPDATE users SET level = 9 WHERE id = 1`, for example) or your favorite database management interface (e.g. PHPMyAdmin), and start making some communities!
 ## Credits
-Lead developers: [PF2M](https://github.com/PF2M), [EnergeticBark](https://github.com/EnergeticBark)
+Lead developers: [PF2M](https://github.com/PF2M), [EnergeticBark](https://github.com/EnergeticBark), [Arian](https://github.com/ariankordi) (new)
 
-Developers: [Ben](https://gitlab.com/benatpearl), [Triangles](https://oasis.100percentnig.ga/users/triangles.py), [Chance](https://github.com/SRGNation) (previously), [jod](https://github.com/men-who-breathe) (previously)
+Developers: Ben, Triangles, Chance (previously), jod (on slaj)
 
-Artwork: [Spicy](https://oasis.100percentnig.ga/users/mario7in1), [Inverse](https://oasis.100percentnig.ga/users/Inverse), [Gnarly](https://cvd-revived.gq/) (previously)
+Artwork: Spicy, Inverse, Gnarly
 
-Marketing: [Pip](https://github.com/Pikacraft64)
+Marketing: Pip
 ## Anything else?
 Not much yet, thanks for asking.
