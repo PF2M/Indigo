@@ -34,7 +34,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"html/template"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -92,7 +91,7 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// Fetch the site's settings from JSON files.
 	settings = getSettings()
-	adminJSON, err := ioutil.ReadFile("admin.json")
+	adminJSON, err := os.ReadFile("admin.json")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -130,9 +129,9 @@ func main() {
 	}
 
 	// Initialize some regex.
-	youtube, _ = regexp.Compile("(?:youtube\\.com\\/\\S*(?:(?:\\/e(?:mbed))?\\/|watch\\/?\\?(?:\\S*?&?v\\=))|youtu\\.be\\/)([a-zA-Z0-9_-]{6,11})")
-	spotify, _ = regexp.Compile("(?:embed\\.|open\\.)(?:spotify\\.com\\/)(?:track\\/|\\?uri=spotify:track:)((\\w|-){22})")
-	soundcloud, _ = regexp.Compile("(soundcloud\\.com|snd\\.sc)\\/(.*)")
+	youtube, _ = regexp.Compile("(?:youtube\\.com/\\S*(?:(?:/e(?:mbed))?/|watch/?\\?(?:\\S*?&?v=))|youtu\\.be/)([a-zA-Z0-9_-]{6,11})")
+	spotify, _ = regexp.Compile("(?:embed\\.|open\\.)(?:spotify\\.com/)(?:track/|\\?uri=spotify:track:)((\\w|-){22})")
+	soundcloud, _ = regexp.Compile("(soundcloud\\.com|snd\\.sc)(.*)")
 	symbols, _ = regexp.Compile("(\\|\\\\|`|\\*|{|}|\\[|\\](|)|\\+|-|!|_|>|\\n|&|:|<)")
 	emotes, err = regexp.Compile(":([^ :]+):")
 	if err != nil {
@@ -289,7 +288,7 @@ func main() {
 	r.HandleFunc("/ws", requireLogin(handleConnections)).Methods("GET")
 
 	// Add a 404 page.
-	r.NotFoundHandler = http.HandlerFunc(useLogin(handle404))
+	r.NotFoundHandler = useLogin(handle404)
 
 	// Serve static assets.
 	r.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
