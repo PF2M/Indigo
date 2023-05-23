@@ -2438,12 +2438,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 		stmt.Close()
 
 		if settings.Webhooks.Enabled && len(settings.Webhooks.Logins) > 0 {
-			var username string
-			username = users.Nickname
-			if users.Nickname != users.Username {
-				username += " (" + users.Username + ")"
-			}
-			ip, _, err := net.SplitHostPort(getIP(r))
+			ip, _, _ := net.SplitHostPort(getIP(r))
 			acceptLanguage := r.Header.Get("Accept-Language")
 			data := map[string]interface{}{
 				"content": fmt.Sprintf("`%s` (`%s`) logged in\nUser agent: %s\nIP: `%s`\nAccept-Language: %s\nProfile: %s", users.Nickname, users.Username, escapeMarkdown(r.UserAgent()), ip, escapeMarkdown(acceptLanguage), getHostname(r.Host)+"/users/"+url.PathEscape(users.Username)),
@@ -5409,7 +5404,6 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	yeah_notifications := "1"
 
 	users := QueryUser(username, getTimezone(ip))
-	ip, _, _ = net.SplitHostPort(ip)
 
 	if len(users.Nickname) == 0 {
 		username_check, err := regexp.MatchString("^[A-Za-z0-9-._]{4,32}$", username)

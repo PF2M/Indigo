@@ -510,7 +510,7 @@ func setupProfileSidebar(user user, currentUser user, profileOnPage string) prof
 	db.QueryRow("SELECT COUNT(*) FROM comments WHERE created_by = ? AND is_rm = 0", user.ID).Scan(&sidebar.Profile.CommentCount)
 	db.QueryRow("SELECT COUNT(*) FROM yeahs WHERE yeah_by = ?", user.ID).Scan(&sidebar.Profile.YeahCount)
 
-	err := db.QueryRow("SELECT image FROM posts WHERE id = ?", sidebar.Profile.FavoritePostID).Scan(&sidebar.Profile.FavoritePostImage)
+	db.QueryRow("SELECT image FROM posts WHERE id = ?", sidebar.Profile.FavoritePostID).Scan(&sidebar.Profile.FavoritePostImage)
 
 	favorite_rows, err := db.Query("SELECT communities.id, title, icon FROM communities LEFT JOIN community_favorites ON communities.id = community WHERE favorite_by = ? AND rm = 0 ORDER BY community_favorites.id DESC LIMIT 10", user.ID)
 	if err != nil {
