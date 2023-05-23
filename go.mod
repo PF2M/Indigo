@@ -1,4 +1,4 @@
-module indigo
+module github.com/PF2M/Indigo
 
 go 1.19
 
