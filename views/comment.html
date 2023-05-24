@@ -222,13 +222,12 @@
 								</div>
 							</div>
 							<div id="yeah-content"{{if not (or (.Yeahs) (.Comment.Yeahed))}} class="none"{{end}}>
-								<a href="/users/{{.CurrentUser.Username}}" class="post-permalink-feeling-icon visitor"{{if not .Comment.Yeahed}} style="display:none"{{end}}>
-									<img src="{{.CurrentUser.Avatar}}" class="user-icon">
+								<a href="/users/{{.CurrentUser.Username}}" class="post-permalink-feeling-icon visitor"{{if not .Comment.Yeahed}} style="display: none;"{{end}}>
+										{{if .CurrentUser.Role.Image}}<img src="{{.CurrentUser.Role.Image}}" class="official-tag">{{end}}
+										<img src="{{.CurrentUser.Avatar}}" class="user-icon">
 								</a>
 								{{range $yeah := .Yeahs}}
-									<a href="/users/{{$yeah.Username}}" id="{{$yeah.ID}}" class="post-permalink-feeling-icon">
-										<img src="{{$yeah.Avatar}}" class="user-icon">
-									</a>
+									{{template "yeah_icon.html" $yeah}}
 								{{end}}
 							</div>
 						{{end}}

@@ -778,6 +778,8 @@ func inForbiddenKeywords(text string, userID int) bool {
 }
 
 // Get the current hostname.
+// TODO: this prints my local server's hostname like 127.0.0.1:8003:8003
+// but is it really worth fixing
 func getHostname(host string) string {
 	hostname := "http"
 	if settings.SSL.Enabled {

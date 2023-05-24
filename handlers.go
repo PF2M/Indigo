@@ -12,7 +12,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -55,13 +54,9 @@ func (u *UserResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 func (u *UserResponseWriter) Flush() {
 	u.ResponseWriter.(http.Flusher).Flush()
 }
-
-// Implement http.CloseNotifier
 func (u *UserResponseWriter) CloseNotify() <-chan bool {
 	return u.ResponseWriter.(http.CloseNotifier).CloseNotify()
 }
-
-// Implement http.Pusher (only if HTTP/2 server push is being used)
 func (u *UserResponseWriter) Push(target string, opts *http.PushOptions) error {
 	return u.ResponseWriter.(http.Pusher).Push(target, opts)
 }
@@ -587,17 +582,21 @@ func createCommentYeah(w http.ResponseWriter, r *http.Request, CurrentUser user)
 
 					var msg wsMessage
 					var yeahs = yeah{}
+					var role int
 
-					db.QueryRow("SELECT yeahs.id, username, avatar FROM yeahs LEFT JOIN users ON users.id = yeah_by WHERE yeah_by = ? ORDER BY yeahs.id DESC LIMIT 1", user_id).Scan(&yeahs.ID, &yeahs.Username, &yeahs.Avatar)
+					db.QueryRow("SELECT yeahs.id, username, avatar, has_mh, role FROM yeahs LEFT JOIN users ON users.id = yeah_by WHERE yeah_by = ? ORDER BY yeahs.id DESC LIMIT 1", user_id).Scan(&yeahs.ID, &yeahs.Username, &yeahs.Avatar, &yeahs.HasMii, &role)
+
+					yeahs.Avatar = getAvatar(yeahs.Avatar, yeahs.HasMii, feeling)
+					if role > 0 {
+						yeahs.Role = getRoleImage(role)
+					}
 
 					msg.Type = "commentYeah"
 					msg.ID = comment_id
-					roleImageHTML := "\">"
-					if len(CurrentUser.Role.Image) > 0 {
-						roleImageHTML = fmt.Sprintf(" official-user\"><img src=\"%s\" class=\"official-tag\">", html.EscapeString(CurrentUser.Role.Image))
-					}
-					// "I don't think we need a separate template for such a small amount of HTML." -the person who originally wrote this function
-					msg.Content = fmt.Sprintf("<a href=\"/users/%s\" id=\"%d\" class=\"post-permalink-feeling-icon%s<img src=\"%s\" class=\"user-icon\"></a>", yeahs.Username, yeahs.ID, roleImageHTML, getAvatar(yeahs.Avatar, yeahs.HasMii, feeling))
+
+					var yeahIconTpl bytes.Buffer
+					templates.ExecuteTemplate(&yeahIconTpl, "yeah_icon.html", yeahs)
+					msg.Content = yeahIconTpl.String()
 
 					for client := range clients {
 						if (clients[client].OnPage == "/posts/"+post_id || clients[client].OnPage == "/comments/"+comment_id) && clients[client].UserID != user_id {
@@ -1001,17 +1000,21 @@ func createPostYeah(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 					var msg wsMessage
 					var yeahs = yeah{}
+					var role int
 
-					db.QueryRow("SELECT yeahs.id, username, avatar, has_mh FROM yeahs LEFT JOIN users ON users.id = yeah_by WHERE yeah_by = ? ORDER BY yeahs.id DESC LIMIT 1", user_id).Scan(&yeahs.ID, &yeahs.Username, &yeahs.Avatar, &yeahs.HasMii)
+					db.QueryRow("SELECT yeahs.id, username, avatar, has_mh, role FROM yeahs LEFT JOIN users ON users.id = yeah_by WHERE yeah_by = ? ORDER BY yeahs.id DESC LIMIT 1", user_id).Scan(&yeahs.ID, &yeahs.Username, &yeahs.Avatar, &yeahs.HasMii, &role)
+
+					yeahs.Avatar = getAvatar(yeahs.Avatar, yeahs.HasMii, feeling)
+					if role > 0 {
+						yeahs.Role = getRoleImage(role)
+					}
 
 					msg.Type = "postYeah"
 					msg.ID = post_id
-					roleImageHTML := "\">"
-					if len(CurrentUser.Role.Image) > 0 {
-						roleImageHTML = fmt.Sprintf(" official-user\"><img src=\"%s\" class=\"official-tag\">", html.EscapeString(CurrentUser.Role.Image))
-					}
-					// "I don't think we need a separate template for such a small amount of HTML." -whoever originally wrote this function
-					msg.Content = fmt.Sprintf("<a href=\"/users/%s\" id=\"%d\" class=\"post-permalink-feeling-icon%s<img src=\"%s\" class=\"user-icon\"></a>", yeahs.Username, yeahs.ID, roleImageHTML, getAvatar(yeahs.Avatar, yeahs.HasMii, feeling))
+
+					var yeahIconTpl bytes.Buffer
+					templates.ExecuteTemplate(&yeahIconTpl, "yeah_icon.html", yeahs)
+					msg.Content = yeahIconTpl.String()
 
 					for client := range clients {
 						if (clients[client].OnPage == "/communities/"+community_id || clients[client].OnPage == "/posts/"+post_id) && clients[client].UserID != user_id {
@@ -5187,8 +5190,7 @@ func showResetPassword(w http.ResponseWriter, r *http.Request, CurrentUser user)
 
 			//auth := smtp.PlainAuth("", settings.SMTP.Email, settings.SMTP.Password, settings.SMTP.Hostname)
 
-			hostname := getHostname(r.Host)
-			message := fmt.Sprintf("Subject: Password reset for %s\nFrom: psy gangnam style hd download shit ass little fucking penis <%s>\nContent-Type: text/html\n\n<!DOCTYPE html><html><body><img src=\"%s/assets/img/menu-logo.png\"><br>A password reset request has been made for your account.<br>If you initiated this request, go here: <a href=\"%s/reset?token=%s\">%s/reset?token=%s</a><br>Otherwise, you can probably ignore this email, as these kinds of requests can be sent by anyone.</body></html>", username, settings.SMTP.Email, hostname, hostname, token, hostname)
+			message := fmt.Sprintf("Subject: Password reset for %s\nFrom: psy gangnam style hd download shit ass little fucking penis <%s>\nContent-Type: text/html\n\n", username, settings.SMTP.Email)
 			c, err := smtp.Dial(settings.SMTP.Hostname + settings.SMTP.Port)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -5227,6 +5229,15 @@ func showResetPassword(w http.ResponseWriter, r *http.Request, CurrentUser user)
 			}
 
 			wr.Write([]byte(message))
+			data = map[string]interface{}{
+				"Username": username,
+				"Hostname": getHostname(r.Host),
+				"Token":    token,
+			}
+			err = templates.ExecuteTemplate(wr, "reset_email.html", data)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 
 			/*err = */
 			wr.Close()

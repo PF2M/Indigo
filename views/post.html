@@ -244,10 +244,7 @@
                             <img src="{{.CurrentUser.Avatar}}" class="user-icon">
                         </a>
                         {{range $yeah := .Yeahs}}
-                            <a href="/users/{{$yeah.Username}}" id="{{$yeah.ID}}" class="post-permalink-feeling-icon">
-                                {{if $yeah.Role}}<img src="{{$yeah.Role}}" class="official-tag">{{end}}
-                                <img src="{{$yeah.Avatar}}" class="user-icon">
-                            </a>
+                          {{template "yeah_icon.html" $yeah}}
                         {{end}}
                     </div>
                     <div id="reply-content">
