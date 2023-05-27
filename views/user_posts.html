@@ -24,8 +24,11 @@
                             {{range $post := .Posts}}
 				                {{template "render_post.html" $post}}
                             {{end}}
+                            <div class="post-list-loading" style="padding: 20px">
+                              <a class="black-button trigger" href="{{if .Posts}}?{{if .Query}}q={{.Query}}{{end}}&offset={{.Offset}}&offset_time={{.OffsetTime}}{{end}}">Load More Posts</a>
+                            </div>
                         {{else}}
-                            {{if eq .Offset 25}}
+                            {{if .AutoPagerize}}
                                 <div class="no-content">
                                     <p>No posts.</p>
                                 </div>

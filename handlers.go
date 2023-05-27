@@ -1915,10 +1915,9 @@ func getRegion(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 // Handle 404 Not Found requests.
 func handle404(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	w.WriteHeader(http.StatusNotFound)
-	pjax := r.Header.Get("X-PJAX") == ""
 	var data = map[string]interface{}{
 		"Title":       "Error",
-		"Pjax":        pjax,
+		"Pjax":        r.Header.Get("X-PJAX") == "",
 		"CurrentUser": CurrentUser,
 		"Error":       "The page could not be found.",
 	}
@@ -2050,7 +2049,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request, CurrentUser user)
 
 // The handler for the front page.
 func index(w http.ResponseWriter, r *http.Request, CurrentUser user) {
-	pjax := r.Header.Get("X-PJAX") == ""
 
 	featured_rows, err := db.Query("SELECT id, title, icon, banner FROM communities WHERE is_featured = 1 AND rm = 0 LIMIT 4")
 	if err != nil {
@@ -2093,7 +2091,7 @@ func index(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 	var data = map[string]interface{}{
 		"Title":       "Communities",
-		"Pjax":        pjax,
+		"Pjax":        r.Header.Get("X-PJAX") == "",
 		"CurrentUser": CurrentUser,
 		"Featured":    featured,
 		"Communities": communities,
@@ -2151,14 +2149,13 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "POST" {
 		formError := r.FormValue("error")
-		pjax := r.Header.Get("X-PJAX") == ""
 		var data = map[string]interface{}{
 			"Title":        "Log In",
 			"CurrentUser":  CurrentUser,
 			"ForceLogins":  settings.ForceLogins,
 			"AllowSignups": settings.AllowSignups,
 			"FormError":    formError,
-			"Pjax":         pjax,
+			"Pjax":         r.Header.Get("X-PJAX") == "",
 			"CSRFField":    csrf.TemplateField(r),
 		}
 		err := templates.ExecuteTemplate(w, "login.html", data)
@@ -3162,7 +3159,6 @@ func showAdminDashboard(w http.ResponseWriter, r *http.Request, CurrentUser user
 		return
 	}
 
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 
 	report_rows, err := db.Query("SELECT posts.id, created_by, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, posts.is_rm, is_rm_by_admin, username, nickname, avatar, has_mh, online, hide_online, color, role, title, icon, rm, source_identifier, posts.type, reports.id, reports.type, message, reason, user FROM (SELECT posts.id, posts.created_by, posts.community_id, posts.created_at, posts.edited_at, posts.feeling, posts.body, posts.image, posts.attachment_type, posts.is_spoiler, posts.post_type, posts.url, posts.url_type, posts.pinned, posts.privacy, repost, migration, migrated_id, migrated_community, posts.is_rm, posts.is_rm_by_admin, users.username, users.nickname, users.avatar, users.has_mh, users.online, users.hide_online, users.color, users.role, title, icon, rm, 0 source_identifier, 0 type FROM posts LEFT JOIN users ON posts.created_by = users.id LEFT JOIN communities ON community_id = communities.id UNION SELECT comments.id, comments.created_by, post, comments.created_at, comments.edited_at, comments.feeling, comments.body, comments.image, comments.attachment_type, comments.is_spoiler, comments.post_type, comments.url, comments.url_type, comments.pinned, op.privacy, 0, 0, 0, 0, comments.is_rm, comments.is_rm_by_admin, creator.username, creator.nickname, creator.avatar, creator.has_mh, creator.online, creator.hide_online, creator.color, creator.role, poster.nickname, poster.avatar, op.is_rm, poster.has_mh, 1 FROM comments LEFT JOIN posts AS op ON post = op.id LEFT JOIN users AS creator ON comments.created_by = creator.id LEFT JOIN users AS poster ON op.created_by = poster.id) posts LEFT JOIN reports ON pid = posts.id AND reports.type = posts.type WHERE reports.is_rm = 0 AND posts.is_rm = 0 AND is_rm_by_admin = 0 ORDER BY reports.id DESC LIMIT 25 OFFSET ?", offset)
@@ -3203,7 +3199,7 @@ func showAdminDashboard(w http.ResponseWriter, r *http.Request, CurrentUser user
 
 	var data = map[string]interface{}{
 		"Title":       "Admin Dashboard",
-		"Pjax":        pjax,
+		"Pjax":        r.Header.Get("X-PJAX") == "",
 		"Offset":      offset,
 		"CurrentUser": CurrentUser,
 		"Admin":       admin,
@@ -3222,11 +3218,9 @@ func showAdminManagerList(w http.ResponseWriter, r *http.Request, CurrentUser us
 		return
 	}
 
-	pjax := r.Header.Get("X-PJAX") == ""
-
 	var data = map[string]interface{}{
 		"Title":       "Manage",
-		"Pjax":        pjax,
+		"Pjax":        r.Header.Get("X-PJAX") == "",
 		"CurrentUser": CurrentUser,
 		"Admin":       admin,
 	}
@@ -3314,10 +3308,9 @@ func showAdminSettings(w http.ResponseWriter, r *http.Request, CurrentUser user)
 		settings = getSettings() // Get a new copy of the settings.
 	}
 
-	pjax := r.Header.Get("X-PJAX") == ""
 	var data = map[string]interface{}{
 		"Title":       "Admin Settings",
-		"Pjax":        pjax,
+		"Pjax":        r.Header.Get("X-PJAX") == "",
 		"CurrentUser": CurrentUser,
 		"Admin":       admin,
 		"Settings":    settings,
@@ -3400,7 +3393,6 @@ func showAllComments(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 // Show a list of all the communities.
 func showAllCommunities(w http.ResponseWriter, r *http.Request, CurrentUser user) {
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
@@ -3427,8 +3419,9 @@ func showAllCommunities(w http.ResponseWriter, r *http.Request, CurrentUser user
 
 	var data = map[string]interface{}{
 		"Title":          "All Communities",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"Offset":         offset,
+		"AutoPagerize":   r.Header.Get("X-AUTOPAGERIZE") == "",
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
 		"FollowerCount":  followerCount,
@@ -3445,7 +3438,6 @@ func showAllCommunities(w http.ResponseWriter, r *http.Request, CurrentUser user
 // Show a user's block list.
 func showBlocked(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
-	pjax := r.Header.Get("X-PJAX") == ""
 	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	user_rows, err := db.Query("SELECT users.id, username, nickname, avatar, has_mh, online, hide_online, color, role, created_at FROM users LEFT JOIN blocks ON users.id = target WHERE source = ? ORDER BY blocks.id DESC LIMIT 25 OFFSET ?", CurrentUser.ID, offset)
@@ -3479,7 +3471,7 @@ func showBlocked(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 	var data = map[string]interface{}{
 		"Title":          "Blocked Users",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"Offset":         offset,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
@@ -3497,7 +3489,6 @@ func showBlocked(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 func showComment(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	comment_id := vars["id"]
-	pjax := r.Header.Get("X-PJAX") == ""
 
 	var comments = comment{}
 	var posts = post{}
@@ -3568,7 +3559,7 @@ func showComment(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 	var data = map[string]interface{}{
 		"Title":       comments.CommenterNickname + "'s Comment on " + posts.PosterNickname + "'s Post",
-		"Pjax":        pjax,
+		"Pjax":        r.Header.Get("X-PJAX") == "",
 		"CurrentUser": CurrentUser,
 		"Comment":     comments,
 		"Post":        posts,
@@ -3590,7 +3581,6 @@ func showCommunity(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 		handle404(w, r, CurrentUser)
 		return
 	}
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	// per-second precision
 	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
@@ -3653,10 +3643,15 @@ func showCommunity(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset += 25
 
 	var data = map[string]interface{}{
-		"Title":         communities.Title,
-		"Pjax":          pjax,
-		"Offset":        offset,
-		"OffsetTime":    offsetTime,
+		"Title":      communities.Title,
+		"Pjax":       r.Header.Get("X-PJAX") == "",
+		"Offset":     offset,
+		"OffsetTime": offsetTime,
+		// determines whether page is being extended via JS
+		// might have to be added to other pages
+		// as js-less "load more posts" buttons are added
+		// but currently ".eq offset 25" is being used to determine this
+		"AutoPagerize":  r.Header.Get("X-AUTOPAGERIZE") == "",
 		"Query":         query,
 		"Repost":        rp,
 		"CurrentUser":   CurrentUser,
@@ -3680,7 +3675,6 @@ func showCommunitySearch(w http.ResponseWriter, r *http.Request, CurrentUser use
 		handle404(w, r, CurrentUser)
 		return
 	}
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 
 	user_rows, err := db.Query("SELECT id, title, description, icon FROM communities WHERE (title LIKE CONCAT('%', ?, '%') OR description LIKE CONCAT('%', ?, '%')) AND rm = 0 ORDER BY title ASC LIMIT 20 OFFSET ?", query, query, offset)
@@ -3708,7 +3702,7 @@ func showCommunitySearch(w http.ResponseWriter, r *http.Request, CurrentUser use
 
 	var data = map[string]interface{}{
 		"Title":          "Search Communities",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"Offset":         offset,
 		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
@@ -3727,12 +3721,11 @@ func showCommunitySearch(w http.ResponseWriter, r *http.Request, CurrentUser use
 
 // Show the team contact page.
 func showContactPage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
-	pjax := r.Header.Get("X-PJAX") == ""
 	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          "Contact the Team",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
@@ -3748,7 +3741,6 @@ func showContactPage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 // Show conversation.
 func showConversation(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
 	if err != nil {
@@ -3823,7 +3815,7 @@ func showConversation(w http.ResponseWriter, r *http.Request, CurrentUser user) 
 		"Title":          "Conversation with " + user.Nickname + " (" + user.Username + ")",
 		"Offset":         offset,
 		"OffsetTime":     offsetTime,
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"Query":          query,
 		"User":           user,
 		"ConversationID": conversationID,
@@ -3861,7 +3853,6 @@ func showConversation(w http.ResponseWriter, r *http.Request, CurrentUser user) 
 
 // Show the "Create Group Chat" page.
 func showCreateGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 
 	friend_rows, err := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM friendships LEFT JOIN users ON users.id = if(source = ?, target, source) LEFT JOIN profiles ON user = users.id WHERE (source = ? OR target = ?) AND (group_permissions = 0 OR (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = user) > 0) ORDER BY friendships.id DESC LIMIT 20 OFFSET ?", CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, offset)
@@ -3890,7 +3881,7 @@ func showCreateGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser use
 
 	var data = map[string]interface{}{
 		"Title":          "Create Group Chat",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"Offset":         offset,
 		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
@@ -3909,7 +3900,6 @@ func showCreateGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser use
 func showEditGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	conversationID := vars["id"]
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 
 	member_rows, err := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM friendships LEFT JOIN users ON users.id = if(source = ?, target, source) LEFT JOIN profiles ON profiles.user = users.id LEFT JOIN group_members ON users.id = group_members.user WHERE (source = ? or target = ?) AND (group_permissions = 0 OR (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = users.id) > 0) AND conversation = ? ORDER BY group_members.id ASC LIMIT 20 OFFSET ?", CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, conversationID, offset)
@@ -3964,7 +3954,7 @@ func showEditGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user)
 
 	var data = map[string]interface{}{
 		"Title":          "Edit Group Chat",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"Offset":         offset,
 		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
@@ -3984,12 +3974,11 @@ func showEditGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user)
 
 // Show the FAQ page.
 func showFAQPage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
-	pjax := r.Header.Get("X-PJAX") == ""
 	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          "Frequently Asked Questions (FAQ)",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
@@ -4013,7 +4002,6 @@ func showFavorites(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 		return
 	}
 	users.Avatar = getAvatar(users.Avatar, users.HasMii, 0)
-	pjax := r.Header.Get("X-PJAX") == ""
 
 	sidebar := setupProfileSidebar(users, CurrentUser, "favorites")
 
@@ -4040,13 +4028,14 @@ func showFavorites(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset += 20
 
 	var data = map[string]interface{}{
-		"Title":       users.Nickname + "'s Favorite Communities",
-		"Pjax":        pjax,
-		"Offset":      offset,
-		"CurrentUser": CurrentUser,
-		"User":        users,
-		"Sidebar":     sidebar,
-		"Users":       favorites,
+		"Title":        users.Nickname + "'s Favorite Communities",
+		"Pjax":         r.Header.Get("X-PJAX") == "",
+		"AutoPagerize": r.Header.Get("X-AUTOPAGERIZE") == "",
+		"Offset":       offset,
+		"CurrentUser":  CurrentUser,
+		"User":         users,
+		"Sidebar":      sidebar,
+		"Users":        favorites,
 	}
 	err = templates.ExecuteTemplate(w, "user_list.html", data)
 	if err != nil {
@@ -4065,7 +4054,6 @@ func showFollowers(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 		return
 	}
 	users.Avatar = getAvatar(users.Avatar, users.HasMii, 0)
-	pjax := r.Header.Get("X-PJAX") == ""
 	sidebar := setupProfileSidebar(users, CurrentUser, "followers")
 
 	follower_rows, _ := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM follows LEFT JOIN users ON users.id = follow_by LEFT JOIN profiles ON user = users.id WHERE follow_to = ? ORDER BY follows.id DESC LIMIT 20 OFFSET ?", users.ID, offset)
@@ -4093,13 +4081,14 @@ func showFollowers(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset += 20
 
 	var data = map[string]interface{}{
-		"Title":       users.Nickname + "'s Followers",
-		"Pjax":        pjax,
-		"Offset":      offset,
-		"CurrentUser": CurrentUser,
-		"User":        users,
-		"Sidebar":     sidebar,
-		"Users":       followers,
+		"Title":        users.Nickname + "'s Followers",
+		"Pjax":         r.Header.Get("X-PJAX") == "",
+		"Offset":       offset,
+		"AutoPagerize": r.Header.Get("X-AUTOPAGERIZE") == "",
+		"CurrentUser":  CurrentUser,
+		"User":         users,
+		"Sidebar":      sidebar,
+		"Users":        followers,
 	}
 	err := templates.ExecuteTemplate(w, "user_list.html", data)
 	if err != nil {
@@ -4118,7 +4107,6 @@ func showFollowing(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 		return
 	}
 	users.Avatar = getAvatar(users.Avatar, users.HasMii, 0)
-	pjax := r.Header.Get("X-PJAX") == ""
 
 	sidebar := setupProfileSidebar(users, CurrentUser, "following")
 
@@ -4147,13 +4135,14 @@ func showFollowing(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset += 20
 
 	var data = map[string]interface{}{
-		"Title":       "Users " + users.Nickname + " is Following",
-		"Pjax":        pjax,
-		"Offset":      offset,
-		"CurrentUser": CurrentUser,
-		"User":        users,
-		"Sidebar":     sidebar,
-		"Users":       following,
+		"Title":        "Users " + users.Nickname + " is Following",
+		"Pjax":         r.Header.Get("X-PJAX") == "",
+		"Offset":       offset,
+		"AutoPagerize": r.Header.Get("X-AUTOPAGERIZE") == "",
+		"CurrentUser":  CurrentUser,
+		"User":         users,
+		"Sidebar":      sidebar,
+		"Users":        following,
 	}
 
 	err := templates.ExecuteTemplate(w, "user_list.html", data)
@@ -4166,7 +4155,6 @@ func showFollowing(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 // Show a user's friend requests.
 func showFriendRequests(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	var notify bool
-	pjax := r.Header.Get("X-PJAX") == ""
 
 	db.QueryRow("SELECT IF(COUNT(*) > 0, 1, 0) FROM notifications WHERE notif_to = ? AND merged IS NULL AND notif_read = 0", CurrentUser.ID).Scan(&notify)
 
@@ -4219,7 +4207,7 @@ func showFriendRequests(w http.ResponseWriter, r *http.Request, CurrentUser user
 
 	var data = map[string]interface{}{
 		"Title":          "Friend Requests",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"CurrentUser":    CurrentUser,
 		"Notify":         notify,
 		"FriendCount":    friendCount,
@@ -4244,7 +4232,6 @@ func showFriends(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 		return
 	}
 	users.Avatar = getAvatar(users.Avatar, users.HasMii, 0)
-	pjax := r.Header.Get("X-PJAX") == ""
 
 	sidebar := setupProfileSidebar(users, CurrentUser, "friends")
 
@@ -4273,13 +4260,14 @@ func showFriends(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset += 20
 
 	var data = map[string]interface{}{
-		"Title":       users.Nickname + "'s Friends",
-		"Pjax":        pjax,
-		"Offset":      offset,
-		"CurrentUser": CurrentUser,
-		"User":        users,
-		"Sidebar":     sidebar,
-		"Users":       friends,
+		"Title":        users.Nickname + "'s Friends",
+		"Pjax":         r.Header.Get("X-PJAX") == "",
+		"Offset":       offset,
+		"AutoPagerize": r.Header.Get("X-AUTOPAGERIZE") == "",
+		"CurrentUser":  CurrentUser,
+		"User":         users,
+		"Sidebar":      sidebar,
+		"Users":        friends,
 	}
 	err := templates.ExecuteTemplate(w, "user_list.html", data)
 	if err != nil {
@@ -4290,7 +4278,6 @@ func showFriends(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 // Show a group chat.
 func showGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
 	if err != nil {
@@ -4378,7 +4365,7 @@ func showGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 		"Title":          title,
 		"Offset":         offset,
 		"OffsetTime":     offsetTime,
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"Query":          query,
 		"ConversationID": id,
 		"IsGroupChat":    true,
@@ -4413,13 +4400,12 @@ func showGroupChat(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 // Show the legal information page.
 func showLegalPage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
-	pjax := r.Header.Get("X-PJAX") == ""
 
 	friendCount, followingCount, followerCount := setupSidebarStatus(CurrentUser.ID)
 
 	var data = map[string]interface{}{
 		"Title":          "Legal Information",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
@@ -4434,7 +4420,6 @@ func showLegalPage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 // Show a user's messages.
 func showMessages(w http.ResponseWriter, r *http.Request, CurrentUser user) {
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
 	if err != nil {
@@ -4503,7 +4488,7 @@ func showMessages(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 	var data = map[string]interface{}{
 		"Title":          "Messages",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"Offset":         offset,
 		"OffsetTime":     offsetTime,
 		"CurrentUser":    CurrentUser,
@@ -4521,7 +4506,6 @@ func showMessages(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 // Show notifications.
 func showNotifications(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	var notify bool
-	pjax := r.Header.Get("X-PJAX") == ""
 
 	db.QueryRow("SELECT IF(COUNT(*) > 0, 1, 0) FROM friend_requests WHERE request_to = ? AND request_read = 0", CurrentUser.ID).Scan(&notify)
 
@@ -4582,7 +4566,7 @@ func showNotifications(w http.ResponseWriter, r *http.Request, CurrentUser user)
 
 	var data = map[string]interface{}{
 		"Title":          "Notifications",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"CurrentUser":    CurrentUser,
 		"Notify":         notify,
 		"FriendCount":    friendCount,
@@ -4618,7 +4602,6 @@ func showPopularPosts(w http.ResponseWriter, r *http.Request, CurrentUser user) 
 		handle404(w, r, CurrentUser)
 		return
 	}
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 
 	date := r.URL.Query().Get("date")
@@ -4674,8 +4657,9 @@ func showPopularPosts(w http.ResponseWriter, r *http.Request, CurrentUser user) 
 
 	var data = map[string]interface{}{
 		"Title":         communities.Title,
-		"Pjax":          pjax,
+		"Pjax":          r.Header.Get("X-PJAX") == "",
 		"Offset":        offset,
+		"AutoPagerize":  r.Header.Get("X-AUTOPAGERIZE") == "",
 		"CurrentUser":   CurrentUser,
 		"Community":     communities,
 		"FavoriteGiven": favoriteGiven,
@@ -4696,7 +4680,6 @@ func showPopularPosts(w http.ResponseWriter, r *http.Request, CurrentUser user) 
 func showPost(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
 	post_id := vars["id"]
-	pjax := r.Header.Get("X-PJAX") == ""
 
 	var posts = post{}
 	db.QueryRow("SELECT posts.id, created_by, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, url, url_type, pinned, privacy, repost, post_type, migration, migrated_id, migrated_community, is_rm_by_admin, username, nickname, avatar, has_mh, online, hide_online, color, role FROM posts LEFT JOIN users ON users.id = created_by WHERE posts.id = ? AND is_rm = 0 AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? > 0) OR created_by = ?)", post_id, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID).Scan(&posts.ID, &posts.CreatedBy, &posts.CommunityID, &posts.CreatedAtTime, &posts.EditedAtTime, &posts.Feeling, &posts.BodyText, &posts.Image, &posts.AttachmentType, &posts.IsSpoiler, &posts.URL, &posts.URLType, &posts.Pinned, &posts.Privacy, &posts.RepostID, &posts.PostType, &posts.MigrationID, &posts.MigratedID, &posts.MigratedCommunity, &posts.IsRMByAdmin, &posts.PosterUsername, &posts.PosterNickname, &posts.PosterIcon, &posts.PosterHasMii, &posts.PosterOnline, &posts.PosterHideOnline, &posts.PosterColor, &posts.PosterRoleID)
@@ -4832,7 +4815,7 @@ func showPost(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 	var data = map[string]interface{}{
 		"Title":          posts.PosterNickname + "'s Post",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"CurrentUser":    CurrentUser,
 		"Community":      community,
 		"Post":           posts,
@@ -4852,7 +4835,6 @@ func showPost(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 // Show a user's profile settings.
 func showProfileSettings(w http.ResponseWriter, r *http.Request, CurrentUser user) {
-	pjax := r.Header.Get("X-PJAX") == ""
 	sidebar := setupProfileSidebar(CurrentUser, CurrentUser, "settings")
 
 	migration_rows, err := db.Query("SELECT id, image, password_required FROM migrations WHERE is_rm = 0")
@@ -4882,7 +4864,7 @@ func showProfileSettings(w http.ResponseWriter, r *http.Request, CurrentUser use
 
 	var data = map[string]interface{}{
 		"Title":       "Profile Settings",
-		"Pjax":        pjax,
+		"Pjax":        r.Header.Get("X-PJAX") == "",
 		"User":        CurrentUser,
 		"CurrentUser": CurrentUser,
 		"Profile":     sidebar.Profile,
@@ -4913,11 +4895,10 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		var CurrentUser user
 		CurrentUser.CSRFToken = csrf.Token(r)
-		pjax := r.Header.Get("X-PJAX") == ""
 		var data = map[string]interface{}{
 			"Title":       "Sign Up",
 			"CurrentUser": CurrentUser,
-			"Pjax":        pjax,
+			"Pjax":        r.Header.Get("X-PJAX") == "",
 			"ReCAPTCHA":   settings.ReCAPTCHA,
 		}
 		err := templates.ExecuteTemplate(w, "signup.html", data)
@@ -5264,20 +5245,18 @@ func showResetPassword(w http.ResponseWriter, r *http.Request, CurrentUser user)
 			}
 		}
 	} else if settings.SMTP.Enabled {
-		pjax := r.Header.Get("X-PJAX") == ""
 		data = map[string]interface{}{
 			"Title":       "Reset Password",
 			"CurrentUser": CurrentUser,
 			"Action":      "request",
-			"Pjax":        pjax,
+			"Pjax":        r.Header.Get("X-PJAX") == "",
 			"CSRFField":   csrf.TemplateField(r),
 		}
 	} else {
-		pjax := r.Header.Get("X-PJAX") == ""
 		data = map[string]interface{}{
 			"Title":       "Reset Password",
 			"CurrentUser": CurrentUser,
-			"Pjax":        pjax,
+			"Pjax":        r.Header.Get("X-PJAX") == "",
 			"Action":      "disabled",
 		}
 	}
@@ -5290,7 +5269,6 @@ func showResetPassword(w http.ResponseWriter, r *http.Request, CurrentUser user)
 
 // Show the rules page.
 func showRulesPage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
-	pjax := r.Header.Get("X-PJAX") == ""
 
 	var friendCount int
 	var followingCount int
@@ -5302,7 +5280,7 @@ func showRulesPage(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 	var data = map[string]interface{}{
 		"Title":          "Indigo Rules",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
@@ -5326,7 +5304,6 @@ func showUser(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	}
 	userAvatarBackup := user.Avatar
 	user.Avatar = getAvatar(user.Avatar, user.HasMii, 0)
-	pjax := r.Header.Get("X-PJAX") == ""
 	sidebar := setupProfileSidebar(user, CurrentUser, "main")
 
 	post_rows, err := db.Query("SELECT posts.id, community_id, created_at, edited_at, feeling, body, image, attachment_type, is_spoiler, post_type, url, url_type, pinned, privacy, repost, migration, migrated_id, migrated_community, is_rm_by_admin, title, icon, rm FROM posts LEFT JOIN communities ON communities.id = community_id WHERE created_by = ? AND is_rm = 0 AND IF(created_by = ?, true, LOWER(body) NOT REGEXP LOWER(?)) AND (privacy = 0 OR (privacy IN (1, 2, 3, 4) AND (SELECT COUNT(*) FROM friendships WHERE source = ? AND target = created_by OR source = created_by AND target = ? LIMIT 1) = 1) OR (privacy IN (1, 3, 5, 6) AND (SELECT COUNT(*) FROM follows WHERE follow_to = created_by AND follow_by = ? LIMIT 1) = 1) OR (privacy IN (1, 2, 5, 7) AND (SELECT COUNT(*) FROM follows WHERE follow_to = ? AND follow_by = created_by) = 1) OR (privacy = 8 AND ? < 0) OR created_by = ?) ORDER BY created_at DESC, posts.id DESC LIMIT 3", user.ID, CurrentUser.ID, escapeForbiddenKeywords(CurrentUser.ForbiddenKeywords), CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.ID, CurrentUser.Level, CurrentUser.ID)
@@ -5372,7 +5349,7 @@ func showUser(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 	var data = map[string]interface{}{
 		"Title":       user.Nickname + "'s Profile",
-		"Pjax":        pjax,
+		"Pjax":        r.Header.Get("X-PJAX") == "",
 		"CurrentUser": CurrentUser,
 		"User":        user,
 		"Sidebar":     sidebar,
@@ -5396,7 +5373,6 @@ func showUserComments(w http.ResponseWriter, r *http.Request, CurrentUser user) 
 	}
 	userAvatarBackup := user.Avatar
 	user.Avatar = getAvatar(user.Avatar, user.HasMii, 0)
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
 	if err != nil {
@@ -5440,15 +5416,16 @@ func showUserComments(w http.ResponseWriter, r *http.Request, CurrentUser user) 
 	offset += 25
 
 	var data = map[string]interface{}{
-		"Title":       user.Nickname + "'s Comments",
-		"Pjax":        pjax,
-		"Offset":      offset,
-		"OffsetTime":  offsetTime,
-		"Query":       query,
-		"CurrentUser": CurrentUser,
-		"User":        user,
-		"Sidebar":     sidebar,
-		"Posts":       posts,
+		"Title":        user.Nickname + "'s Comments",
+		"Pjax":         r.Header.Get("X-PJAX") == "",
+		"Offset":       offset,
+		"OffsetTime":   offsetTime,
+		"AutoPagerize": r.Header.Get("X-AUTOPAGERIZE") == "",
+		"Query":        query,
+		"CurrentUser":  CurrentUser,
+		"User":         user,
+		"Sidebar":      sidebar,
+		"Posts":        posts,
 	}
 	err = templates.ExecuteTemplate(w, "user_posts.html", data)
 	if err != nil {
@@ -5467,7 +5444,6 @@ func showUserPosts(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	}
 	userAvatarBackup := user.Avatar
 	user.Avatar = getAvatar(user.Avatar, user.HasMii, 0)
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
 	if err != nil {
@@ -5507,15 +5483,16 @@ func showUserPosts(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset += 25
 
 	var data = map[string]interface{}{
-		"Title":       user.Nickname + "'s Posts",
-		"Pjax":        pjax,
-		"Offset":      offset,
-		"OffsetTime":  offsetTime,
-		"Query":       query,
-		"CurrentUser": CurrentUser,
-		"User":        user,
-		"Sidebar":     sidebar,
-		"Posts":       posts,
+		"Title":        user.Nickname + "'s Posts",
+		"Pjax":         r.Header.Get("X-PJAX") == "",
+		"Offset":       offset,
+		"OffsetTime":   offsetTime,
+		"AutoPagerize": r.Header.Get("X-AUTOPAGERIZE") == "",
+		"Query":        query,
+		"CurrentUser":  CurrentUser,
+		"User":         user,
+		"Sidebar":      sidebar,
+		"Posts":        posts,
 	}
 	err = templates.ExecuteTemplate(w, "user_posts.html", data)
 	if err != nil {
@@ -5531,7 +5508,6 @@ func showUserSearch(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 		handle404(w, r, CurrentUser)
 		return
 	}
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 
 	user_rows, err := db.Query("SELECT username, nickname, avatar, has_mh, online, hide_online, color, role, IFNULL(comment, '') FROM users LEFT JOIN profiles ON user = users.id WHERE username LIKE CONCAT('%', ?, '%') OR nickname LIKE CONCAT('%', ?, '%') ORDER BY username ASC LIMIT 20 OFFSET ?", query, query, offset)
@@ -5565,7 +5541,7 @@ func showUserSearch(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 
 	var data = map[string]interface{}{
 		"Title":          "Search Users",
-		"Pjax":           pjax,
+		"Pjax":           r.Header.Get("X-PJAX") == "",
 		"CurrentUser":    CurrentUser,
 		"FriendCount":    friendCount,
 		"FollowingCount": followingCount,
@@ -5593,7 +5569,6 @@ func showUserYeahs(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	}
 	user.Avatar = getAvatar(user.Avatar, user.HasMii, 0)
 
-	pjax := r.Header.Get("X-PJAX") == ""
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
 	query := r.URL.Query().Get("q")
 	sidebar := setupProfileSidebar(user, CurrentUser, "yeahs")
@@ -5629,14 +5604,15 @@ func showUserYeahs(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	offset += 25
 
 	var data = map[string]interface{}{
-		"Title":       user.Nickname + "'s Yeahs",
-		"Pjax":        pjax,
-		"Offset":      offset,
-		"Query":       query,
-		"CurrentUser": CurrentUser,
-		"User":        user,
-		"Sidebar":     sidebar,
-		"Posts":       posts,
+		"Title":        user.Nickname + "'s Yeahs",
+		"Pjax":         r.Header.Get("X-PJAX") == "",
+		"Offset":       offset,
+		"Query":        query,
+		"CurrentUser":  CurrentUser,
+		"AutoPagerize": r.Header.Get("X-AUTOPAGERIZE") == "",
+		"User":         user,
+		"Sidebar":      sidebar,
+		"Posts":        posts,
 	}
 	err = templates.ExecuteTemplate(w, "user_posts.html", data)
 	if err != nil {

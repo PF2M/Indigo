@@ -22,8 +22,13 @@
                             </div>
                         </li>
                         {{end}}
+                        {{if .Communities}}
+                        <div class="post-list-loading" style="padding: 20px">
+                          <a class="black-button trigger" href="/communities/all?offset={{.Offset}}">Load More Communities</a>
+                        </div>
+                        {{end}}
                     {{else}}
-                        {{if eq .Offset 25}}
+                        {{if .AutoPagerize}}
                             <div class="no-content">
                                 <p>No communities have been made yet.</p>
                             </div>

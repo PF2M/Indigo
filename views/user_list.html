@@ -1,4 +1,4 @@
-{{if eq .Offset 20}}
+{{if .AutoPagerize}}
     {{if .Pjax}}
         {{template "header.html" .}}
         <meta property="og:profile:username" content="{{.User.Username}}">
@@ -40,8 +40,13 @@
                                 </div>
                             </li>
                         {{end}}
+                        {{if .Users}}
+                        <div class="post-list-loading" style="padding: 20px">
+                          <a class="black-button trigger" href="?&offset={{.Offset}}">Load More Users</a>
+                        </div>
+                        {{end}}
                     {{else}}
-                        {{if eq .Offset 20}}
+                        {{if .AutoPagerize}}
                             <div class="no-content"><p>
                             {{if eq .Sidebar.ProfileOnPage "friends"}}
                                 No friends to display.
@@ -58,7 +63,7 @@
                         {{end}}
                     {{end}}
                 </ul>
-{{if eq .Offset 20}}
+{{if .AutoPagerize}}
                 </div>
             </div>
         </div>

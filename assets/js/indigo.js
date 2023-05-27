@@ -755,6 +755,8 @@ var Olv = Olv || {};
     b.Content.autopagerize = function(c, d) {
         function e() {
             if (!(k._disabledCount || h.scrollTop() + h.height() + 200 < f.offset().top + f.outerHeight())) {
+                // remove existing post-list-loading element because this houses the load more posts button that isn't used when this code is running.
+                a('.post-list-loading').remove();
                 var d = a("<div/>").attr("class", "post-list-loading").append(a(b.Closed.open_spinner)).appendTo(f);
                 i = a.ajax({
                     url: g,
@@ -2421,6 +2423,7 @@ var Olv = Olv || {};
 		})
     }),
     b.router.connect("^/communities/all$", function(c, d, e) {
+		/* AAAAAAAAAAAAAAAAAAAAA BURN IT WITH FIRE
 		b.Closed.changesel("community");
 		gsl = function(e) {
 			e.preventDefault();
@@ -2433,6 +2436,8 @@ var Olv = Olv || {};
         $('.community-switcher-tab.gen').on('click',gsl),
 		$('.community-switcher-tab.game').on('click',gsl),
 		$('.community-switcher-tab.special').on('click',gsl);
+		*/
+		b.Content.autopagerize('.community-list', e);
     }),
 	b.router.connect("^/communities.search$", function(c) {
 		$('form.search').on('submit', function(s) {
@@ -3808,10 +3813,10 @@ function updateTime() {
             if(twelveHourClockTime === 0) {
                 twelveHourClockTime = 12;
             }
-            timestampText = dateTime.getMonth().padStart(2, "0") + 1 + "/" +
-                dateTime.getDate().padStart(2, "0") + "/" +
+            timestampText = (dateTime.getMonth() + 1).toString().padStart(2, "0") + "/" +
+                dateTime.getDate().toString().padStart(2, "0") + "/" +
                 dateTime.getFullYear() + " " +
-                twelveHourClockTime.toString().padStart(2, "0") + ":" +
+                twelveHourClockTime + ":" +
                 dateTime.getMinutes().toString().padStart(2, "0") + " " +
                 (dateTime.getHours() >= 12 ? "PM" : "AM");
 

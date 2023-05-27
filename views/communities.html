@@ -1,4 +1,4 @@
-{{if eq .Offset 25}}
+{{if .AutoPagerize}}
     {{if .Pjax}}
         {{template "header.html" .}}
         <meta property="og:description" content="{{if .Community.Description}}{{.Community.Description}}{{else}}View {{.Community.Name}} on Indigo.{{end}}">
@@ -165,15 +165,18 @@
                             {{range $post := .Posts}}
 				                {{template "render_post.html" $post}}
                             {{end}}
+                            <div class="post-list-loading" style="padding: 20px">
+                              <a class="black-button trigger" href="{{if .Posts}}?{{if .PopularPosts}}date={{.CurrentDate}}{{end}}{{if .Query}}&q={{.Query}}{{end}}&offset={{.Offset}}&offset_time={{.OffsetTime}}{{end}}">Load More Posts</a>
+                            </div>
                         {{else}}
-                            {{if eq .Offset 25}}
+                            {{if .AutoPagerize}}
                                 <div class="no-content no-post-content">
                                     <p>This community doesn't have any posts yet.</p>
                                 </div>
                             {{end}}
                         {{end}}
                     </div>
-{{if eq .Offset 25}}
+{{if .AutoPagerize}}
                     </div>
                 </div>
             </div>
