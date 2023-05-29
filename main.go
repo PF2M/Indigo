@@ -287,6 +287,7 @@ func main() {
 	r.HandleFunc("/notifications/friend_requests", requireLogin(showFriendRequests)).Methods("GET")
 
 	// Settings routes.
+	r.HandleFunc("/settings/profile", requireLogin(showProfileSettings)).Methods("GET")
 	r.HandleFunc("/settings/profile", requireLogin(editProfileSettings)).Methods("POST")
 	r.HandleFunc("/region", requireLogin(getRegion)).Methods("POST")
 	r.HandleFunc("/miis", getMii).Methods("POST")

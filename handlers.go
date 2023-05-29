@@ -1840,7 +1840,9 @@ func getMii(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if resp.StatusCode == 404 {
+	// this used to be == 404 which ariankordi.net might have returned (I Don't Know Anymore)
+	// "nnidlt.murilo.eu.org" does the same however pf2m.com returns 400 along with a JSON
+	if resp.StatusCode != 200 {
 		http.Error(w, "The Nintendo Network ID you provided doesn't exist.", http.StatusNotFound)
 	}
 
