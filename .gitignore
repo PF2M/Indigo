@@ -6,6 +6,7 @@ tmp/
 # binaries. also main? but not realy
 handlers
 indigo
+Indigo
 # my personal configs
 config-my.json
 config-s.json

@@ -254,6 +254,127 @@ func adminUnbanUser(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	db.Exec("INSERT INTO audit_log_entries(type, context, created_by) values(3, ?, ?)", userID, CurrentUser.ID)
 }
 
+// audit log
+func showAdminAuditLog(w http.ResponseWriter, r *http.Request, CurrentUser user) {
+	if CurrentUser.Level < admin.Manage.MinimumLevel {
+		http.Redirect(w, r, "/", 302)
+		return
+	}
+
+	offset, _ := strconv.Atoi(r.FormValue("offset"))
+	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
+	if err != nil {
+		offsetTime = time.Now().Unix()
+	}
+	typee := r.FormValue("type")
+	username := r.FormValue("username")
+
+	var rows *sql.Rows
+	//var err error
+
+	if typee != "" {
+		if username != "" {
+			var userIdThing int
+			db.QueryRow("SELECT id FROM users WHERE username = ? LIMIT 1", username).Scan(&userIdThing)
+			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE type = ? AND created_by = ? AND UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", typee, userIdThing, offsetTime, offset)
+		} else {
+			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE type = ? AND UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", typee, offsetTime, offset)
+		}
+	} else {
+		if username != "" {
+			var userIdThing int
+			db.QueryRow("SELECT id FROM users WHERE username = ? LIMIT 1", username).Scan(&userIdThing)
+			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE created_by = ? AND UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", userIdThing, offsetTime, offset)
+		} else {
+			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", offsetTime, offset)
+		}
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var auditLogEntries []auditLogEntry
+
+	for rows.Next() {
+		var row = auditLogEntry{}
+		var targetUser user
+
+		err = rows.Scan(&row.ID, &row.Type, &row.Context, &row.CreatedAt, &row.CreatedBy)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if row.Type == 2 || row.Type == 3 {
+			// ONLY get user
+			db.QueryRow("SELECT username, avatar, has_mh FROM users WHERE id = ? LIMIT 1", row.Context).Scan(&targetUser.Username, &targetUser.Avatar, &targetUser.HasMii)
+		} else {
+			// post and then user
+			var targetUserId int
+			var postBody string
+			if row.Type == 0 {
+				db.QueryRow("SELECT body, created_by FROM posts WHERE id = ? LIMIT 1", row.Context).Scan(&postBody, &targetUserId)
+			} else if row.Type == 1 {
+				db.QueryRow("SELECT body, created_by FROM comments WHERE id = ? LIMIT 1", row.Context).Scan(&postBody, &targetUserId)
+			} else if row.Type == 4 {
+				db.QueryRow("SELECT token, user FROM password_resets WHERE id = ? LIMIT 1", row.Context).Scan(&postBody, &targetUserId)
+				if targetUserId == 1 {
+					targetUserId = row.CreatedBy
+					targetUser.ID = row.CreatedBy
+					targetUser.Username = postBody
+				}
+			}
+			if postBody != "" {
+				row.PostSummary = " ("
+				if len(postBody) > 50 {
+					row.PostSummary += postBody[0:50] + "..."
+				} else {
+					row.PostSummary += postBody
+				}
+				row.PostSummary += ")"
+			}
+			db.QueryRow("SELECT avatar, has_mh FROM users WHERE id = ? LIMIT 1", targetUserId).Scan(&targetUser.Avatar, &targetUser.HasMii)
+		}
+		row.TargetUserAvatar = getAvatar(targetUser.Avatar, targetUser.HasMii, 0)
+		switch row.Type {
+		case 0:
+			row.TypeText = "post delete"
+			row.TypeURI = "/posts/" + strconv.Itoa(row.Context)
+		case 1:
+			row.TypeText = "comment delete"
+			row.TypeURI = "/comments/" + strconv.Itoa(row.Context)
+		case 2:
+			row.TypeText = "ban"
+			row.TypeURI = "/users/" + targetUser.Username
+		case 3:
+			row.TypeText = "unban"
+			row.TypeURI = "/users/" + targetUser.Username
+		case 4:
+			row.TypeText = "invite"
+			if targetUser.ID == row.CreatedBy {
+				row.TypeURI = "/invite/" + targetUser.Username
+			} else {
+				row.TypeURI = "/users/" + targetUser.Username
+			}
+		}
+		db.QueryRow("SELECT username, nickname, avatar, has_mh FROM users WHERE id = ? LIMIT 1", row.CreatedBy).Scan(&row.CreatorUsername, &row.CreatorNickname, &row.CreatorAvatar, &row.CreatorHasMii)
+		row.CreatorFinalAva = getAvatar(row.CreatorAvatar, row.CreatorHasMii, 3)
+		auditLogEntries = append(auditLogEntries, row)
+	}
+	rows.Close()
+
+	var data = map[string]interface{}{
+		"AuditLogEntries": auditLogEntries,
+		"Offset":          offset,
+		"OffsetTime":      offsetTime,
+		"Type":            typee,
+		"User":            username,
+	}
+	err = templates.ExecuteTemplate(w, "audit_logs.html", data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 // Block a user.
 func blockUser(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	vars := mux.Vars(r)
@@ -5937,140 +6058,3 @@ func voteOnPoll(w http.ResponseWriter, r *http.Request, CurrentUser user) {
 	}
 }
 
-type auditLogEntry struct {
-	ID               int
-	Type             int
-	TypeText         string
-	TypeURI          string
-	CreatorUsername  string
-	CreatorNickname  string
-	CreatorHasMii    bool
-	CreatorAvatar    string
-	CreatorFinalAva  string
-	Context          int
-	TargetUserAvatar string
-	PostSummary      string
-	CreatedAt        string
-	CreatedBy        int
-}
-
-// audit log
-func showAdminAuditLog(w http.ResponseWriter, r *http.Request, CurrentUser user) {
-	if CurrentUser.Level < admin.Manage.MinimumLevel {
-		http.Redirect(w, r, "/", 302)
-		return
-	}
-
-	offset, _ := strconv.Atoi(r.FormValue("offset"))
-	offsetTime, err := strconv.ParseInt(r.FormValue("offset_time"), 10, 64)
-	if err != nil {
-		offsetTime = time.Now().Unix()
-	}
-	typee := r.FormValue("type")
-	username := r.FormValue("username")
-
-	var rows *sql.Rows
-	//var err error
-
-	if typee != "" {
-		if username != "" {
-			var userIdThing int
-			db.QueryRow("SELECT id FROM users WHERE username = ? LIMIT 1", username).Scan(&userIdThing)
-			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE type = ? AND created_by = ? AND UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", typee, userIdThing, offsetTime, offset)
-		} else {
-			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE type = ? AND UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", typee, offsetTime, offset)
-		}
-	} else {
-		if username != "" {
-			var userIdThing int
-			db.QueryRow("SELECT id FROM users WHERE username = ? LIMIT 1", username).Scan(&userIdThing)
-			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE created_by = ? AND UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", userIdThing, offsetTime, offset)
-		} else {
-			rows, err = db.Query("SELECT id, type, context, created_at, created_by FROM audit_log_entries WHERE UNIX_TIMESTAMP(created_at) <= ? ORDER BY created_at DESC LIMIT 50 OFFSET ?", offsetTime, offset)
-		}
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	var auditLogEntries []auditLogEntry
-
-	for rows.Next() {
-		var row = auditLogEntry{}
-		var targetUser user
-
-		err = rows.Scan(&row.ID, &row.Type, &row.Context, &row.CreatedAt, &row.CreatedBy)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if row.Type == 2 || row.Type == 3 {
-			// ONLY get user
-			db.QueryRow("SELECT username, avatar, has_mh FROM users WHERE id = ? LIMIT 1", row.Context).Scan(&targetUser.Username, &targetUser.Avatar, &targetUser.HasMii)
-		} else {
-			// post and then user
-			var targetUserId int
-			var postBody string
-			if row.Type == 0 {
-				db.QueryRow("SELECT body, created_by FROM posts WHERE id = ? LIMIT 1", row.Context).Scan(&postBody, &targetUserId)
-			} else if row.Type == 1 {
-				db.QueryRow("SELECT body, created_by FROM comments WHERE id = ? LIMIT 1", row.Context).Scan(&postBody, &targetUserId)
-			} else if row.Type == 4 {
-				db.QueryRow("SELECT token, user FROM password_resets WHERE id = ? LIMIT 1", row.Context).Scan(&postBody, &targetUserId)
-				if targetUserId == 1 {
-					targetUserId = row.CreatedBy
-					targetUser.ID = row.CreatedBy
-					targetUser.Username = postBody
-				}
-			}
-			if postBody != "" {
-				row.PostSummary = " ("
-				if len(postBody) > 50 {
-					row.PostSummary += postBody[0:50] + "..."
-				} else {
-					row.PostSummary += postBody
-				}
-				row.PostSummary += ")"
-			}
-			db.QueryRow("SELECT avatar, has_mh FROM users WHERE id = ? LIMIT 1", targetUserId).Scan(&targetUser.Avatar, &targetUser.HasMii)
-		}
-		row.TargetUserAvatar = getAvatar(targetUser.Avatar, targetUser.HasMii, 0)
-		switch row.Type {
-		case 0:
-			row.TypeText = "post delete"
-			row.TypeURI = "/posts/" + strconv.Itoa(row.Context)
-		case 1:
-			row.TypeText = "comment delete"
-			row.TypeURI = "/comments/" + strconv.Itoa(row.Context)
-		case 2:
-			row.TypeText = "ban"
-			row.TypeURI = "/users/" + targetUser.Username
-		case 3:
-			row.TypeText = "unban"
-			row.TypeURI = "/users/" + targetUser.Username
-		case 4:
-			row.TypeText = "invite"
-			if targetUser.ID == row.CreatedBy {
-				row.TypeURI = "/invite/" + targetUser.Username
-			} else {
-				row.TypeURI = "/users/" + targetUser.Username
-			}
-		}
-		db.QueryRow("SELECT username, nickname, avatar, has_mh FROM users WHERE id = ? LIMIT 1", row.CreatedBy).Scan(&row.CreatorUsername, &row.CreatorNickname, &row.CreatorAvatar, &row.CreatorHasMii)
-		row.CreatorFinalAva = getAvatar(row.CreatorAvatar, row.CreatorHasMii, 3)
-		auditLogEntries = append(auditLogEntries, row)
-	}
-	rows.Close()
-
-	var data = map[string]interface{}{
-		"AuditLogEntries": auditLogEntries,
-		"Offset":          offset,
-		"OffsetTime":      offsetTime,
-		"Type":            typee,
-		"User":            username,
-	}
-	err = templates.ExecuteTemplate(w, "audit_logs.html", data)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}

@@ -19,6 +19,23 @@ type adminConfig struct {
 	}
 }
 
+type auditLogEntry struct {
+	ID               int
+	Type             int
+	TypeText         string
+	TypeURI          string
+	CreatorUsername  string
+	CreatorNickname  string
+	CreatorHasMii    bool
+	CreatorAvatar    string
+	CreatorFinalAva  string
+	Context          int
+	TargetUserAvatar string
+	PostSummary      string
+	CreatedAt        string
+	CreatedBy        int
+}
+
 // Variable declarations for comments.
 type comment struct {
 	ID                        int

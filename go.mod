@@ -11,10 +11,10 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/kataras/go-sessions/v3 v3.3.1
 	github.com/lucasb-eyer/go-colorful v1.2.0
-	github.com/microcosm-cc/bluemonday v1.0.23
+	github.com/microcosm-cc/bluemonday v1.0.25
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/russross/blackfriday/v2 v2.1.0
-	golang.org/x/crypto v0.9.0
+	golang.org/x/crypto v0.11.0
 )
 
 require (
@@ -29,6 +29,6 @@ require (
 	github.com/sergi/go-diff v1.3.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.47.0 // indirect
-	golang.org/x/net v0.10.0 // indirect
-	golang.org/x/sys v0.8.0 // indirect
+	golang.org/x/net v0.12.0 // indirect
+	golang.org/x/sys v0.10.0 // indirect
 )
